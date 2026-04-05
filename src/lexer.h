@@ -1,10 +1,13 @@
 #pragma once
 
+#include <llvm/IR/Value.h>
+
 #include <cstddef>
 #include <map>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #define TOKEN(x) x,
@@ -12,6 +15,14 @@ enum BashLexerToken {
 #include "lexer.inc"
 };
 #undef TOKEN
+
+#define OP(x) x,
+enum MathOp {
+#include "mathop.inc"
+};
+#undef OP
+
+std::string math_op_to_string(MathOp op);
 
 struct ParenMap {
   size_t index_counter = 0;  // this always incs
@@ -34,6 +45,8 @@ class BashLexerSegment {
   std::string str;
 
   std::string get_token_name();
+  int16_t get_token_precidence();
+  MathOp get_math_op();
 
   static BashLexerSegment munch_token(const std::string& source, size_t& cursor,
                                       BashLexerToken prev_token,

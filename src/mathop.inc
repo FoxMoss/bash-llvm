@@ -1,0 +1,3 @@
+ OP(OP_MOD)
+ OP(OP_EQ_EQ)
+ OP(OP_UNK)

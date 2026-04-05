@@ -1,6 +1,7 @@
 #include "lexer.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <map>
 #include <optional>
@@ -14,6 +15,11 @@ bool is_alpha(char c) {
   bool uppercase = ('A' <= c && c <= 'Z');
 
   return uppercase || lowercase;
+}
+bool is_numeric(char c) {
+  bool num = ('0' <= c && c <= '9');
+
+  return num;
 }
 bool is_alpha_numeric(char c) {
   bool lowercase = ('a' <= c && c <= 'z');
@@ -70,7 +76,7 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
     }
 
     return BashLexerSegment(TOK_VALUE, token);
-  } else if (is_alpha_numeric(current_char.value()) ||
+  } else if (is_alpha(current_char.value()) ||
              current_char == '$') {  // value, identifier, or keyword
     std::optional<char> next_char = peek_char(source, cursor);
     while (next_char.has_value() && is_alpha_numeric(next_char.value())) {
@@ -95,6 +101,32 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
     }
 
     return BashLexerSegment(TOK_IDENTIFIER, token);
+  } else if (is_numeric(current_char.value())) {
+    std::optional<char> next_char = peek_char(source, cursor);
+    while (next_char.has_value() && is_numeric(next_char.value())) {
+      current_char = read_char(source, cursor, token);
+      next_char = peek_char(source, cursor);
+    }
+
+    if (next_char != '.') {
+      return BashLexerSegment(TOK_NUMERIC, token);
+    }
+    std::optional<char> next_next_char = peek_char(source, cursor);
+    if (next_next_char.has_value() &&
+        next_next_char.value() == '.') {  // no double dot
+      return BashLexerSegment(TOK_NUMERIC, token);
+    }
+
+    current_char = read_char(source, cursor, token);
+    next_char = peek_char(source, cursor);
+
+    while (next_char.has_value() && is_numeric(next_char.value())) {
+      current_char = read_char(source, cursor, token);
+      next_char = peek_char(source, cursor);
+    }
+
+    return BashLexerSegment(TOK_NUMERIC, token);
+
   } else if (current_char == '#') {
     std::optional<char> next_char = peek_char(source, cursor);
     while (next_char.has_value() && next_char.value() != '\n') {
@@ -159,7 +191,7 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
       current_char = read_char(source, cursor, token);
       return BashLexerSegment(TOK_RANGE, token);
     }
-    printf("ERROR: Single period is unacceptable");
+    printf("ERROR: Single period is unacceptable\n");
     return BashLexerSegment(TOK_UNK, token);
   } else if (current_char == '(') {
     paren_map.level_counter++;
@@ -240,6 +272,43 @@ std::string BashLexerSegment::get_token_name() {
     return #x;
   switch (token) {
 #include "lexer.inc"
+  }
+#undef TOKEN
+  std::unreachable();
+}
+
+// we're stealing from a better language for this
+// https://en.cppreference.com/w/c/language/operator_precedence.html
+int16_t BashLexerSegment::get_token_precidence() {
+  switch (token) {
+    case TOK_MOD:
+      return 20;
+    case TOK_EQ_EQ:
+      return 10;
+    default:
+      return -1;
+  }
+  std::unreachable();
+}
+
+MathOp BashLexerSegment::get_math_op() {
+  switch (token) {
+    case TOK_MOD:
+      return OP_MOD;
+    case TOK_EQ_EQ:
+      return OP_EQ_EQ;
+    default:
+      return OP_UNK;
+  }
+  std::unreachable();
+}
+
+std::string math_op_to_string(MathOp op) {
+#define OP(x) \
+  case x:     \
+    return #x;
+  switch (op) {
+#include "mathop.inc"
   }
 #undef TOKEN
   std::unreachable();
