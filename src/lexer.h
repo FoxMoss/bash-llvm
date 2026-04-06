@@ -58,3 +58,6 @@ class BashLexerSegment {
 std::vector<BashLexerSegment> paren_map_fusing(
     std::vector<BashLexerSegment> inputs, ParenMap paren_map);
 
+bool is_alpha_numeric(char c);
+bool is_numeric(char c);
+bool is_alpha(char c);

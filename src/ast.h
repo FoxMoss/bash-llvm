@@ -30,17 +30,15 @@ class ExprAST {
     std::print("ExprAST\n");
   }
 
-  virtual std::expected<llvm::Value*, std::string> codegen(
-      CodegenState& state)  {
+  virtual std::expected<llvm::Value*, std::string> codegen(CodegenState&) {
     return std::unexpected("Not implemented\n");
-
   };
 };
 
 class StringExprAST : public ExprAST {
+ public:
   std::string val;
 
- public:
   StringExprAST(const std::string& val) : val(val) {}
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -241,11 +239,11 @@ class ConcatExprAST : public ExprAST {
 class RangeExprAST : public ExprAST {
   std::string first_value;
   std::string second_value;
-  uint32_t step;
+  int32_t step;
 
  public:
   RangeExprAST(const std::string& first_value, const std::string& second_value,
-               const uint32_t& step)
+               const int32_t& step)
       : first_value(first_value), second_value(second_value), step(step) {}
 
   void print_name(ssize_t level) override {
@@ -263,12 +261,11 @@ class RangeExprAST : public ExprAST {
 };
 
 class AssignmentExprAST : public ExprAST {
-  std::unique_ptr<IdentifierExprAST> identifier;
+  std::string identifier;
   std::unique_ptr<ExprAST> value;
 
  public:
-  AssignmentExprAST(std::unique_ptr<IdentifierExprAST> identifier,
-                    std::unique_ptr<ExprAST> value)
+  AssignmentExprAST(std::string identifier, std::unique_ptr<ExprAST> value)
       : identifier(std::move(identifier)), value(std::move(value)) {}
 
   void print_name(ssize_t level) override {
@@ -279,9 +276,8 @@ class AssignmentExprAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("AssignmentExprAST\n");
+    std::print("AssignmentExprAST \"{}\"\n", level);
 
-    identifier->print_name(level + 1);
     value->print_name(level + 1);
   }
   std::expected<llvm::Value*, std::string> codegen(
@@ -289,12 +285,12 @@ class AssignmentExprAST : public ExprAST {
 };
 
 class ForAST : public ExprAST {
-  std::unique_ptr<ExprAST> index;
+  std::string index;
   std::unique_ptr<ExprAST> range;
   std::unique_ptr<ExprAST> body;
 
  public:
-  ForAST(std::unique_ptr<ExprAST> index, std::unique_ptr<ExprAST> range,
+  ForAST(std::string index, std::unique_ptr<ExprAST> range,
          std::unique_ptr<ExprAST> body)
       : index(std::move(index)),
         range(std::move(range)),
@@ -308,9 +304,8 @@ class ForAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("ForAST\n");
+    std::print("ForAST {} in\n", index);
 
-    index->print_name(level + 1);
     range->print_name(level + 1);
     body->print_name(level + 1);
   }

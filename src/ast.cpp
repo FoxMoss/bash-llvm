@@ -1,6 +1,9 @@
-#include <optional>
-
 #include "ast.h"
+
+#include <memory>
+#include <optional>
+#include <vector>
+
 #include "lexer.h"
 
 #define RETURN_WITH_WARNING()                                           \
@@ -93,7 +96,8 @@ std::optional<std::unique_ptr<StringExprAST>> parse_value(
 
   std::optional<std::unique_ptr<StringExprAST>> ret;
 
-  if (current_segment->token != TOK_VALUE) {
+  if (current_segment->token != TOK_VALUE &&
+      current_segment->token != TOK_IDENTIFIER) {
     RETURN_WITH_WARNING()
   }
 
@@ -251,20 +255,9 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
               std::move(last_expr.value()), std::move(curly.value()));
         }
         break;
+      case TOK_VALUE:
+        [[fallthrough]];
       case TOK_IDENTIFIER: {
-        auto ident = parse_identifier(lexer_segments, cursor);
-        if (!ident.has_value()) {
-          RETURN_WITH_WARNING();
-        }
-        if (last_expr.has_value()) {
-          last_expr = std::make_unique<ConcatExprAST>(
-              std::move(last_expr.value()), std::move(ident.value()));
-        } else {
-          last_expr = std::move(ident.value());
-        }
-      } break;
-
-      case TOK_VALUE: {
         auto ident = parse_value(lexer_segments, cursor);
         if (!ident.has_value()) {
           RETURN_WITH_WARNING();
@@ -273,12 +266,14 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           last_expr = std::make_unique<ConcatExprAST>(
               std::move(last_expr.value()), std::move(ident.value()));
         } else {
-          last_expr = std::move(ident.value());
+          std::vector<std::string> array = {ident.value()->val};
+          last_expr = std::make_unique<RangeArrayExprAST>(array);
         }
       } break;
 
         // skip it
       case TOK_WHITESPACE:
+        [[fallthrough]];
       case TOK_NEWLINE:
         break;
 
@@ -408,7 +403,8 @@ std::optional<std::unique_ptr<ForAST>> parse_for(
   std::optional<BashLexerSegment> current_segment =
       get_next_segment(lexer_segments, cursor);
 
-  auto index = parse_identifier(lexer_segments, cursor);
+  std::optional<std::unique_ptr<StringExprAST>> index =
+      parse_value(lexer_segments, cursor);
   if (!index.has_value()) {
     RETURN_WITH_WARNING();
   }
@@ -447,7 +443,7 @@ std::optional<std::unique_ptr<ForAST>> parse_for(
   }
 
   get_next_segment(lexer_segments, cursor);  // move cursor to continue parsing
-  return std::make_unique<ForAST>(std::move(index.value()),
+  return std::make_unique<ForAST>(std::move(index.value()->val),
                                   std::move(range.value()),
                                   std::move(body.value()));
 }
