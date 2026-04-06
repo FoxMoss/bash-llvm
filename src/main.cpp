@@ -49,19 +49,151 @@ std::expected<llvm::Value*, std::string> IdentifierExprAST::codegen(
 #define UNWRAP_EXPECTED(val) \
   if (!val.has_value()) return std::unexpected(val.error());
 
+std::expected<llvm::Value*, std::string> cast_to_float(CodegenState& state,
+                                                       llvm::Value* val) {
+  if (val->getType()->isIntegerTy()) {
+    return state.builder->CreateSIToFP(val,
+                                       llvm::Type::getFloatTy(*state.context));
+  } else if (val->getType()->isFloatTy()) {
+    return val;
+  } else if (val->getType()->isPointerTy()) {
+    llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
+
+    llvm::BasicBlock* header = state.builder->GetInsertBlock();
+
+    auto length_search =
+        llvm::BasicBlock::Create(*state.context, "length_search", parent_func);
+    auto increment = llvm::BasicBlock::Create(*state.context, "increment");
+    auto merge = llvm::BasicBlock::Create(*state.context, "merge");
+
+    state.builder->CreateBr(length_search);
+
+    state.builder->SetInsertPoint(length_search);
+
+    llvm::PHINode* length = state.builder->CreatePHI(
+        llvm::Type::getInt64Ty(*state.context), 2, "length");
+    length->addIncoming(
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 0),
+        header);
+
+    auto search_ptr = state.builder->CreateIntToPtr(
+        state.builder->CreateAdd(
+            state.builder->CreatePtrToInt(
+                val, llvm::Type::getInt64Ty(*state.context)),
+            length),
+        llvm::PointerType::get(*state.context, 0));
+
+    auto searched_val = state.builder->CreateLoad(
+        llvm::Type::getInt8Ty(*state.context), search_ptr);
+
+    auto was_null = state.builder->CreateICmpEQ(
+        searched_val,
+        llvm::ConstantInt::get(llvm::Type::getInt8Ty(*state.context), 0));
+
+    auto next_length_test = state.builder->CreateAdd(
+        length,
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 0));
+
+    length->addIncoming(next_length_test, length_search);
+
+    auto real_length = state.builder->CreateSub(
+        length,
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 2));
+
+    state.builder->CreateCondBr(was_null, increment, length_search);
+
+    length_search = state.builder->GetInsertBlock();
+
+    parent_func->insert(parent_func->end(), increment);
+    state.builder->SetInsertPoint(increment);
+
+    llvm::PHINode* index = state.builder->CreatePHI(
+        llvm::Type::getInt64Ty(*state.context), 2, "index");
+    index->addIncoming(
+        // 2 just to offset the fact that we'll be 2 off from the lowest digit
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 0),
+        length_search);
+
+    llvm::PHINode* return_value = state.builder->CreatePHI(
+        llvm::Type::getFloatTy(*state.context), 2, "interpreted_value");
+    return_value->addIncoming(
+        llvm::ConstantFP::get(llvm::Type::getFloatTy(*state.context), 0),
+        length_search);
+
+    llvm::PHINode* power_to = state.builder->CreatePHI(
+        llvm::Type::getFloatTy(*state.context), 2, "power_to");
+    power_to->addIncoming(
+        llvm::ConstantFP::get(llvm::Type::getFloatTy(*state.context), 1),
+        length_search);
+
+    auto found_char = state.builder->CreateLoad(
+        llvm::Type::getInt8Ty(*state.context),
+        state.builder->CreateIntToPtr(
+            state.builder->CreateSub(
+                state.builder->CreateAdd(
+                    state.builder->CreatePtrToInt(
+                        val, llvm::Type::getInt64Ty(*state.context)),
+                    real_length),
+                index),
+            llvm::PointerType::get(*state.context, 0)));
+
+    auto char_int_val = state.builder->CreateUIToFP(
+        state.builder->CreateSub(
+            found_char,
+            llvm::ConstantInt::get(llvm::Type::getInt8Ty(*state.context), '0')),
+        llvm::Type::getFloatTy(*state.context));
+
+    auto new_return = state.builder->CreateFAdd(
+        state.builder->CreateFMul(char_int_val, power_to), return_value);
+    return_value->addIncoming(new_return, increment);
+
+    auto new_power = state.builder->CreateFMul(
+        power_to,
+        llvm::ConstantFP::get(llvm::Type::getFloatTy(*state.context), 10));
+
+    power_to->addIncoming(new_power, increment);
+
+    auto reached_end = state.builder->CreateICmpEQ(index, real_length);
+
+    auto new_index = state.builder->CreateAdd(
+        index,
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1));
+
+    index->addIncoming(new_index, increment);
+
+    state.builder->CreateCondBr(reached_end, merge, increment);
+
+    increment = state.builder->GetInsertBlock();
+
+    parent_func->insert(parent_func->end(), merge);
+    state.builder->SetInsertPoint(merge);
+
+    return new_return;
+  } else {
+    return std::unexpected("Could not reduce to float");
+  }
+}
+
 std::expected<llvm::Value*, std::string> MathOpExprAST::codegen(
     CodegenState& state) {
   auto left = first->codegen(state);
   UNWRAP_EXPECTED(left)
 
+  auto left_val = cast_to_float(state, left.value());
+  UNWRAP_EXPECTED(left_val)
+
   auto right = second->codegen(state);
   UNWRAP_EXPECTED(right)
 
+  auto right_val = cast_to_float(state, left.value());
+  UNWRAP_EXPECTED(right_val)
+
   switch (op) {
     case OP_MOD:
-      return state.builder->CreateFRem(left.value(), right.value(), "modtmp");
+      return state.builder->CreateFRem(left_val.value(), right_val.value(),
+                                       "modtmp");
     case OP_EQ_EQ:
-      return state.builder->CreateFCmpUEQ(left.value(), right.value(),
+      return state.builder->CreateFCmpUEQ(left_val.value(), right_val.value(),
                                           "eqeqtmp");
     case OP_UNK:
       return std::unexpected("Math operator is unknown");
@@ -81,14 +213,14 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
   auto args_codegen = args->codegen(state);
   UNWRAP_EXPECTED(args_codegen)
 
-  if (!args_codegen.value()->getType()->isArrayTy()) {
+  if (!args_codegen.value()->getType()->isVectorTy()) {
     return std::unexpected("Args value not an array");
   }
 
-  auto args_array = static_cast<llvm::ConstantArray*>(args_codegen.value());
+  auto args_array = static_cast<llvm::ConstantVector*>(args_codegen.value());
 
   auto args_array_type =
-      static_cast<llvm::ArrayType*>(args_codegen.value()->getType());
+      static_cast<llvm::FixedVectorType*>(args_codegen.value()->getType());
 
   if (args_array == nullptr || args_array_type == nullptr) {
     return std::unexpected("Args value not an array");
@@ -138,6 +270,9 @@ std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(
 
       state.builder->SetInsertPoint(short_path);
 
+      auto left_again = reduce_to_bool(state, left_full.value());
+      UNWRAP_EXPECTED(left_again)
+
       state.builder->CreateBr(merge);
 
       short_path = state.builder->GetInsertBlock();
@@ -163,7 +298,7 @@ std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(
           llvm::Type::getInt1Ty(*state.context), 2, "andtmp");
 
       phinode->addIncoming(right.value(), both_path);
-      phinode->addIncoming(left.value(), short_path);
+      phinode->addIncoming(left_again.value(), short_path);
       return phinode;
     };
       // as a natural outcome of logic these to are the same just with the cond
@@ -172,6 +307,9 @@ std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(
       state.builder->CreateCondBr(left.value(), short_path, both_path);
 
       state.builder->SetInsertPoint(short_path);
+
+      auto left_again = reduce_to_bool(state, left_full.value());
+      UNWRAP_EXPECTED(left_again)
 
       state.builder->CreateBr(merge);
 
@@ -197,8 +335,8 @@ std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(
       llvm::PHINode* phinode = state.builder->CreatePHI(
           llvm::Type::getInt1Ty(*state.context), 2, "ortmp");
 
-      phinode->addIncoming(left.value(), both_path);
-      phinode->addIncoming(right.value(), short_path);
+      phinode->addIncoming(right.value(), both_path);
+      phinode->addIncoming(left_again.value(), short_path);
       return phinode;
     };
     case STATEMENT_OP_UNK:
@@ -214,8 +352,7 @@ std::expected<llvm::Value*, std::string> RangeArrayExprAST::codegen(
     values_llvm.push_back(state.builder->CreateGlobalString(member));
   }
 
-  return llvm::ConstantArray::get(
-      llvm::ArrayType::get(values_llvm.front()->getType(), values_llvm.size()),
+  return llvm::ConstantVector::get(
       llvm::ArrayRef<llvm::Constant*>(values_llvm.data(), values_llvm.size()));
 }
 
@@ -226,14 +363,14 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
   auto first_array = first->codegen(state);
   UNWRAP_EXPECTED(first_array)
 
-  if (!first_array.value()->getType()->isArrayTy()) {
+  if (!first_array.value()->getType()->isVectorTy()) {
     return std::unexpected("First value not an array");
   }
 
-  auto first_constant = static_cast<llvm::ConstantArray*>(first_array.value());
+  auto first_constant = static_cast<llvm::ConstantVector*>(first_array.value());
 
   auto first_array_type =
-      static_cast<llvm::ArrayType*>(first_array.value()->getType());
+      static_cast<llvm::FixedVectorType*>(first_array.value()->getType());
 
   if (first_constant == nullptr || first_array_type == nullptr) {
     return std::unexpected("First value not an array");
@@ -253,18 +390,18 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
   auto second_array = second->codegen(state);
   UNWRAP_EXPECTED(second_array)
 
-  if (!second_array.value()->getType()->isArrayTy()) {
-    return std::unexpected("second value not an array");
+  if (!second_array.value()->getType()->isVectorTy()) {
+    return std::unexpected("Second value not an vector");
   }
 
   auto second_constant =
-      static_cast<llvm::ConstantArray*>(second_array.value());
+      static_cast<llvm::ConstantVector*>(second_array.value());
 
   auto second_array_type =
-      static_cast<llvm::ArrayType*>(second_array.value()->getType());
+      static_cast<llvm::FixedVectorType*>(second_array.value()->getType());
 
   if (second_constant == nullptr || second_array_type == nullptr) {
-    return std::unexpected("second value not an array");
+    return std::unexpected("Second value not an array");
   }
 
   for (uint64_t i = 0; i < second_array_type->getNumElements(); i++) {
@@ -278,8 +415,7 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
     values_llvm.push_back(static_value);
   }
 
-  return llvm::ConstantArray::get(
-      llvm::ArrayType::get(values_llvm.front()->getType(), values_llvm.size()),
+  return llvm::ConstantVector::get(
       llvm::ArrayRef<llvm::Constant*>(values_llvm.data(), values_llvm.size()));
 }
 
@@ -306,7 +442,7 @@ std::expected<llvm::Value*, std::string> RangeExprAST::codegen(
   auto min = std::min(first_value_parsed, second_value_parsed);
   auto max = std::max(first_value_parsed, second_value_parsed);
   auto abs_step = std::fabs(step);
-  for (double i = min; i < max; i += abs_step) {
+  for (int64_t i = min; i < max; i += abs_step) {
     values_llvm.push_back(state.builder->CreateGlobalString(std::to_string(i)));
   }
 
@@ -314,8 +450,7 @@ std::expected<llvm::Value*, std::string> RangeExprAST::codegen(
     return std::unexpected("Cannot make a range without items");
   }
 
-  return llvm::ConstantArray::get(
-      llvm::ArrayType::get(values_llvm.front()->getType(), values_llvm.size()),
+  return llvm::ConstantVector::get(
       llvm::ArrayRef<llvm::Constant*>(values_llvm.data(), values_llvm.size()));
 }
 
@@ -330,14 +465,14 @@ std::expected<llvm::Value*, std::string> ForAST::codegen(CodegenState& state) {
   auto range_array = range->codegen(state);
   UNWRAP_EXPECTED(range_array)
 
-  if (!range_array.value()->getType()->isArrayTy()) {
+  if (!range_array.value()->getType()->isVectorTy()) {
     return std::unexpected("Range is not an array");
   }
 
-  auto range_constant = static_cast<llvm::ConstantArray*>(range_array.value());
+  auto range_constant = static_cast<llvm::ConstantVector*>(range_array.value());
 
   auto range_array_type =
-      static_cast<llvm::ArrayType*>(range_array.value()->getType());
+      static_cast<llvm::FixedVectorType*>(range_array.value()->getType());
 
   if (range_constant == nullptr || range_array_type == nullptr) {
     return std::unexpected("range value not an array");
@@ -386,7 +521,7 @@ std::expected<llvm::Value*, std::string> ForAST::codegen(CodegenState& state) {
   UNWRAP_EXPECTED(body_value)
 
   auto next_var = state.builder->CreateAdd(variable, step);
-  variable->addIncoming(next_var, body_block);
+  variable->addIncoming(next_var, state.builder->GetInsertBlock());
 
   state.builder->CreateBr(loop);
 
@@ -433,8 +568,7 @@ int main() {
     std::print("Error: {}\n", value.error());
     return 1;
   }
-  state.builder->CreateRet(
-      llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context)));
+  state.builder->CreateRetVoid();
 
   std::error_code error;
   llvm::raw_fd_ostream out_file("out.ll", error);

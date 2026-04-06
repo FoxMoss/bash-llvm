@@ -43,7 +43,7 @@ struct CodegenState {
         llvm::FunctionType::get(llvm::Type::getVoidTy(*context), false);
 
     entry = llvm::Function::Create(entry_type, llvm::Function::ExternalLinkage,
-                                   "entry", module.get());
+                                   "main", module.get());
 
     llvm::BasicBlock* entry_block =
         llvm::BasicBlock::Create(*context, "entry", entry);
