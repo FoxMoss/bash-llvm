@@ -1,6 +1,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 
 extern "C" {
 void echo(uint64_t argc, char** argv) {
@@ -9,4 +10,5 @@ void echo(uint64_t argc, char** argv) {
   }
   printf("\n");
 }
+float str_to_float(char* str) { return std::strtof(str, NULL); }
 }

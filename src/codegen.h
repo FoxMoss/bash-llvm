@@ -19,15 +19,27 @@ struct CodegenState {
   llvm::Function* entry;
 
   void generate_standard_library() {
-    std::vector<llvm::Type*> bash_func_args = {
-        llvm::Type::getInt64Ty(*context),
-        llvm::ArrayType::get(llvm::PointerType::get(*this->context, 0), 1)};
+    {
+      std::vector<llvm::Type*> bash_func_args = {
+          llvm::Type::getInt64Ty(*context),
+          llvm::PointerType::get(*this->context, 0)};
 
-    llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-        llvm::Type::getVoidTy(*context), bash_func_args, false);
+      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+          llvm::Type::getVoidTy(*context), bash_func_args, false);
 
-    llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                           "echo", module.get());
+      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                             "echo", module.get());
+    }
+    {
+      std::vector<llvm::Type*> bash_func_args = {
+          llvm::PointerType::get(*this->context, 0)};
+
+      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+          llvm::Type::getFloatTy(*context), bash_func_args, false);
+
+      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                             "str_to_float", module.get());
+    }
   }
 
   CodegenState() {

@@ -211,6 +211,27 @@ class RangeArrayExprAST : public ExprAST {
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
 };
+class ConvertToRangeArrayExprAST : public ExprAST {
+  std::unique_ptr<ExprAST> val;
+
+ public:
+  ConvertToRangeArrayExprAST(std::unique_ptr<ExprAST> val)
+      : val(std::move(val)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("ConvertToRangeArrayExprAST\n");
+    val->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
 
 class ConcatExprAST : public ExprAST {
   std::unique_ptr<ExprAST> first;

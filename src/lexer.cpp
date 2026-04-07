@@ -100,7 +100,12 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
       // TODO: finish the LUT
     }
 
-    return BashLexerSegment(TOK_IDENTIFIER, token);
+    if (token.starts_with("$")) {
+      return BashLexerSegment(TOK_IDENTIFIER,
+                              token.substr(1, token.size() - 1));
+    } else {
+      return BashLexerSegment(TOK_VALUE, token);
+    }
   } else if (is_numeric(current_char.value())) {
     std::optional<char> next_char = peek_char(source, cursor);
     while (next_char.has_value() && is_numeric(next_char.value())) {

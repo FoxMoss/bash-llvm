@@ -68,7 +68,8 @@ std::optional<std::unique_ptr<IdentifierExprAST>> parse_identifier(
 
   std::optional<std::unique_ptr<IdentifierExprAST>> ret;
 
-  if (current_segment->token != TOK_IDENTIFIER) {
+  if (current_segment->token != TOK_IDENTIFIER &&
+      current_segment->token != TOK_VALUE) {
     RETURN_WITH_WARNING()
   }
 
@@ -255,9 +256,20 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
               std::move(last_expr.value()), std::move(curly.value()));
         }
         break;
-      case TOK_VALUE:
-        [[fallthrough]];
       case TOK_IDENTIFIER: {
+        auto ident = parse_identifier(lexer_segments, cursor);
+        if (!ident.has_value()) {
+          RETURN_WITH_WARNING();
+        }
+        if (last_expr.has_value()) {
+          last_expr = std::make_unique<ConcatExprAST>(
+              std::move(last_expr.value()), std::move(ident.value()));
+        } else {
+          last_expr = std::make_unique<ConvertToRangeArrayExprAST>(
+              std::move(ident.value()));
+        }
+      } break;
+      case TOK_VALUE: {
         auto ident = parse_value(lexer_segments, cursor);
         if (!ident.has_value()) {
           RETURN_WITH_WARNING();
@@ -517,6 +529,8 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
             StatementOpExprAST::STATEMENT_OP_OR, std::move(return_expr.value()),
             std::move(righthandside.value()));
       } break;
+      case TOK_VALUE:
+        [[fallthrough]];
       case TOK_IDENTIFIER: {
         auto call = parse_call_expression(lexer_segments, cursor);
         if (!call.has_value()) {

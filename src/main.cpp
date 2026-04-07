@@ -56,7 +56,24 @@ std::expected<llvm::Value*, std::string> cast_to_float(CodegenState& state,
                                        llvm::Type::getFloatTy(*state.context));
   } else if (val->getType()->isFloatTy()) {
     return val;
+  } else if (val->getType()->isDoubleTy()) {
+    return state.builder->CreateFPCast(val,
+                                       llvm::Type::getFloatTy(*state.context));
   } else if (val->getType()->isPointerTy()) {
+    llvm::Function* program_called = state.module->getFunction("str_to_float");
+    if (!program_called) return std::unexpected("Unknown function referenced");
+
+    // If argument mismatch error.
+    if (program_called->arg_size() != 1)
+      return std::unexpected("Program str_to_float is illdefined");
+
+    std::vector<llvm::Value*> arg_values = {val};
+
+    return state.builder->CreateCall(program_called, arg_values);
+
+    // hand written str to float parsing
+    // dragons be ware
+#if 0
     llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
 
     llvm::BasicBlock* header = state.builder->GetInsertBlock();
@@ -92,13 +109,9 @@ std::expected<llvm::Value*, std::string> cast_to_float(CodegenState& state,
 
     auto next_length_test = state.builder->CreateAdd(
         length,
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 0));
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1));
 
     length->addIncoming(next_length_test, length_search);
-
-    auto real_length = state.builder->CreateSub(
-        length,
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 2));
 
     state.builder->CreateCondBr(was_null, increment, length_search);
 
@@ -130,11 +143,15 @@ std::expected<llvm::Value*, std::string> cast_to_float(CodegenState& state,
         llvm::Type::getInt8Ty(*state.context),
         state.builder->CreateIntToPtr(
             state.builder->CreateSub(
-                state.builder->CreateAdd(
-                    state.builder->CreatePtrToInt(
-                        val, llvm::Type::getInt64Ty(*state.context)),
-                    real_length),
-                index),
+
+                state.builder->CreateSub(
+                    state.builder->CreateAdd(
+                        state.builder->CreatePtrToInt(
+                            val, llvm::Type::getInt64Ty(*state.context)),
+                        length),
+                    index),
+                llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
+                                       1)),
             llvm::PointerType::get(*state.context, 0)));
 
     auto char_int_val = state.builder->CreateUIToFP(
@@ -153,7 +170,7 @@ std::expected<llvm::Value*, std::string> cast_to_float(CodegenState& state,
 
     power_to->addIncoming(new_power, increment);
 
-    auto reached_end = state.builder->CreateICmpEQ(index, real_length);
+    auto reached_end = state.builder->CreateICmpEQ(index, length);
 
     auto new_index = state.builder->CreateAdd(
         index,
@@ -169,6 +186,7 @@ std::expected<llvm::Value*, std::string> cast_to_float(CodegenState& state,
     state.builder->SetInsertPoint(merge);
 
     return new_return;
+#endif
   } else {
     return std::unexpected("Could not reduce to float");
   }
@@ -185,7 +203,7 @@ std::expected<llvm::Value*, std::string> MathOpExprAST::codegen(
   auto right = second->codegen(state);
   UNWRAP_EXPECTED(right)
 
-  auto right_val = cast_to_float(state, left.value());
+  auto right_val = cast_to_float(state, right.value());
   UNWRAP_EXPECTED(right_val)
 
   switch (op) {
@@ -226,18 +244,28 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
     return std::unexpected("Args value not an array");
   }
 
+  auto stack_args = state.builder->CreateAlloca(
+      llvm::PointerType::get(*state.context, 0),
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
+                             args_array_type->getNumElements()));
+
+  state.builder->CreateStore(args_array, stack_args);
+
   std::vector<llvm::Value*> arg_values = {
       llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(*state.context),
                              args_array_type->getNumElements()),
-      args_codegen.value()};
+      stack_args};
 
   return state.builder->CreateCall(program_called, arg_values);
 }
 std::expected<llvm::Value*, std::string> reduce_to_bool(CodegenState& state,
                                                         llvm::Value* val) {
   if (val->getType()->isFloatingPointTy()) {
+    printf("is float %i \n", val->getType()->isIntegerTy());
     return state.builder->CreateFCmpOGT(
         val, llvm::ConstantFP::get(*state.context, llvm::APFloat(0.0)));
+  } else if (val->getType()->isIntegerTy(1)) {
+    return val;
   } else if (val->getType()->isIntegerTy()) {
     return state.builder->CreateICmpSGT(
         val, llvm::ConstantInt::get(val->getType(), 0));
@@ -252,26 +280,23 @@ std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(
     CodegenState& state) {
   llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
 
-  auto short_path =
-      llvm::BasicBlock::Create(*state.context, "short", parent_func);
-
-  auto both_path = llvm::BasicBlock::Create(*state.context, "both");
-  auto merge = llvm::BasicBlock::Create(*state.context, "merge");
-
   auto left_full = first->codegen(state);
   UNWRAP_EXPECTED(left_full)
 
   auto left = reduce_to_bool(state, left_full.value());
   UNWRAP_EXPECTED(left)
 
+  auto short_path =
+      llvm::BasicBlock::Create(*state.context, "short", parent_func);
+
+  auto both_path = llvm::BasicBlock::Create(*state.context, "both");
+  auto merge = llvm::BasicBlock::Create(*state.context, "merge");
+
   switch (op) {
     case STATEMENT_OP_AND: {
       state.builder->CreateCondBr(left.value(), both_path, short_path);
 
       state.builder->SetInsertPoint(short_path);
-
-      auto left_again = reduce_to_bool(state, left_full.value());
-      UNWRAP_EXPECTED(left_again)
 
       state.builder->CreateBr(merge);
 
@@ -298,7 +323,7 @@ std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(
           llvm::Type::getInt1Ty(*state.context), 2, "andtmp");
 
       phinode->addIncoming(right.value(), both_path);
-      phinode->addIncoming(left_again.value(), short_path);
+      phinode->addIncoming(left.value(), short_path);
       return phinode;
     };
       // as a natural outcome of logic these to are the same just with the cond
@@ -378,7 +403,7 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
 
   for (uint64_t i = 0; i < first_array_type->getNumElements(); i++) {
     auto value =
-        state.builder->CreateExtractElement(first_constant, uint64_t{0});
+        state.builder->CreateExtractElement(first_constant, uint64_t{i});
     auto static_value = static_cast<llvm::Constant*>(value);
     if (static_value == nullptr) {
       continue;
@@ -406,7 +431,7 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
 
   for (uint64_t i = 0; i < second_array_type->getNumElements(); i++) {
     auto value =
-        state.builder->CreateExtractElement(second_constant, uint64_t{0});
+        state.builder->CreateExtractElement(second_constant, uint64_t{i});
     auto static_value = static_cast<llvm::Constant*>(value);
     if (static_value == nullptr) {
       continue;
@@ -417,6 +442,17 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
 
   return llvm::ConstantVector::get(
       llvm::ArrayRef<llvm::Constant*>(values_llvm.data(), values_llvm.size()));
+}
+
+std::expected<llvm::Value*, std::string> ConvertToRangeArrayExprAST::codegen(
+    CodegenState& state) {
+  auto val_val = val->codegen(state);
+  UNWRAP_EXPECTED(val_val)
+
+  return state.builder->CreateInsertElement(
+      llvm::VectorType::get(llvm::PointerType::get(*state.context, 0),
+                            llvm::ElementCount::get(1, false)),
+      val_val.value(), uint64_t{0});
 }
 
 std::expected<llvm::Value*, std::string> RangeExprAST::codegen(
@@ -442,7 +478,7 @@ std::expected<llvm::Value*, std::string> RangeExprAST::codegen(
   auto min = std::min(first_value_parsed, second_value_parsed);
   auto max = std::max(first_value_parsed, second_value_parsed);
   auto abs_step = std::fabs(step);
-  for (int64_t i = min; i < max; i += abs_step) {
+  for (int64_t i = min; i <= max; i += abs_step) {
     values_llvm.push_back(state.builder->CreateGlobalString(std::to_string(i)));
   }
 
