@@ -1,7 +1,10 @@
 #include "ast.h"
 
+#include <algorithm>
+#include <expected>
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "lexer.h"
@@ -38,7 +41,7 @@ std::optional<BashLexerSegment> peek_segment(
   if (cursor + 1 < lexer_segments.size()) {
     return lexer_segments[cursor + 1];
   }
-  RETURN_WITH_WARNING();
+  return {};
 }
 
 void skip_whitespace(const std::vector<BashLexerSegment>& lexer_segments,
@@ -51,7 +54,8 @@ void skip_whitespace(const std::vector<BashLexerSegment>& lexer_segments,
     current_segment = get_next_segment(lexer_segments, cursor);
   }
 }
-std::optional<std::unique_ptr<IdentifierExprAST>> parse_identifier(
+
+std::optional<std::unique_ptr<ExprAST>> parse_identifier(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
   std::optional<BashLexerSegment> current_segment;
   current_segment = get_current_segment(lexer_segments, cursor);
@@ -68,8 +72,7 @@ std::optional<std::unique_ptr<IdentifierExprAST>> parse_identifier(
 
   std::optional<std::unique_ptr<IdentifierExprAST>> ret;
 
-  if (current_segment->token != TOK_IDENTIFIER &&
-      current_segment->token != TOK_VALUE) {
+  if (current_segment->token != TOK_IDENTIFIER) {
     RETURN_WITH_WARNING()
   }
 
@@ -80,7 +83,7 @@ std::optional<std::unique_ptr<IdentifierExprAST>> parse_identifier(
   return ret;
 }
 
-std::optional<std::unique_ptr<StringExprAST>> parse_value(
+std::optional<std::unique_ptr<ExprAST>> parse_value(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
   std::optional<BashLexerSegment> current_segment;
   current_segment = get_current_segment(lexer_segments, cursor);
@@ -95,21 +98,60 @@ std::optional<std::unique_ptr<StringExprAST>> parse_value(
     RETURN_WITH_WARNING();
   }
 
-  std::optional<std::unique_ptr<StringExprAST>> ret;
+  std::optional<std::unique_ptr<ExprAST>> ret;
 
-  if (current_segment->token != TOK_VALUE &&
-      current_segment->token != TOK_IDENTIFIER) {
+  if (current_segment->token == TOK_BACKTICK) {
+    get_next_segment(lexer_segments, cursor);  // eat tick
+
+    auto ret = parse_expression(lexer_segments, cursor);
+    if (!ret.has_value()) {
+      RETURN_WITH_WARNING();
+    }
+
+    get_next_segment(lexer_segments, cursor);  // eat tick
+
+    return ret;
+  } else if (current_segment->token == TOK_VALUE ||
+             current_segment->token == TOK_NUMERIC) {
+    while (current_segment->token == TOK_IDENTIFIER ||
+           current_segment->token == TOK_VALUE ||
+           current_segment->token == TOK_NUMERIC) {
+      if (current_segment->token == TOK_IDENTIFIER) {
+        auto ident = parse_identifier(lexer_segments, cursor);
+
+        if (!ident.has_value()) {
+          RETURN_WITH_WARNING()
+        }
+
+        if (ret.has_value()) {
+          ret = std::make_unique<ConcatStringsAST>(std::move(ret.value()),
+                                                   std::move(ident.value()));
+        } else {
+          ret = std::move(ident.value());
+        }
+      } else {
+        auto str = std::make_unique<StringExprAST>(current_segment->str);
+        current_segment = get_next_segment(lexer_segments, cursor);
+
+        if (ret.has_value()) {
+          ret = std::make_unique<ConcatStringsAST>(std::move(ret.value()),
+                                                   std::move(str));
+        } else {
+          ret = std::move(str);
+        }
+      }
+      current_segment = get_current_segment(lexer_segments, cursor);
+    }
+
+    return ret;
+  } else if (current_segment->token == TOK_NEWLINE) {
+    return std::make_unique<StringExprAST>("");
+  } else {
     RETURN_WITH_WARNING()
   }
-
-  ret = std::make_unique<StringExprAST>(current_segment->str);
-  // eat ident
-  current_segment = get_next_segment(lexer_segments, cursor);
-
-  return ret;
 }
 
-std::optional<std::unique_ptr<NumericExprAST>> parse_numeric(
+std::optional<std::unique_ptr<ExprAST>> parse_numeric(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
   std::optional<BashLexerSegment> current_segment;
   current_segment = get_current_segment(lexer_segments, cursor);
@@ -138,6 +180,24 @@ std::optional<std::unique_ptr<NumericExprAST>> parse_numeric(
   return ret;
 }
 
+std::optional<std::unique_ptr<ExprAST>> parse_identifier_or_value(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
+  std::optional<BashLexerSegment> current_segment;
+  current_segment = get_current_segment(lexer_segments, cursor);
+
+  // skip whitespace
+  while (current_segment.has_value() &&
+         current_segment->token == TOK_WHITESPACE) {
+    current_segment = get_next_segment(lexer_segments, cursor);
+  }
+
+  if (current_segment->token == TOK_IDENTIFIER) {
+    return parse_identifier(lexer_segments, cursor);
+  } else if (current_segment->token == TOK_NUMERIC) {
+    return parse_numeric(lexer_segments, cursor);
+  }
+  return parse_value(lexer_segments, cursor);
+}
 std::optional<std::unique_ptr<ExprAST>> parse_curly_expression(
     const std::vector<BashLexerSegment>& lexer_segments,
     size_t& cursor) noexcept {
@@ -163,7 +223,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_curly_expression(
                                   return a.token == TOK_COMMA;
                                 }) != sub_segments.end();
 
-  std::vector<std::string> content_array;
+  std::vector<std::unique_ptr<ExprAST>> content_array;
   std::optional<std::string> first;
   std::optional<std::string> second;
   uint32_t step = 1;
@@ -178,7 +238,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_curly_expression(
       if (segment.token != TOK_COMMA) {
         blob.append(segment.str);
       } else if (blob != "") {
-        content_array.push_back(blob);
+        content_array.push_back(std::make_unique<StringExprAST>(blob));
       }
     }
   } else {
@@ -205,11 +265,11 @@ std::optional<std::unique_ptr<ExprAST>> parse_curly_expression(
           blob = "";
           state = SEARCH_FOR_STEP;
         } else if (state == SEARCH_FOR_STEP) {
-          step = std::stoul(blob);
+          step = atol(blob.c_str());
         }
 
       } else if (blob != "") {
-        content_array.push_back(blob);
+        content_array.push_back(std::make_unique<StringExprAST>(blob));
       }
     }
   }
@@ -240,6 +300,8 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
     skip_whitespace(lexer_segments, cursor);
 
     current_segment = get_current_segment(lexer_segments, cursor);
+
+    std::string blob = "";
     switch (current_segment->token) {
       case TOK_OPEN_CURLY:
         if (!last_expr.has_value()) {
@@ -269,26 +331,49 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
               std::move(ident.value()));
         }
       } break;
+      case TOK_NUMERIC:
+        [[fallthrough]];
+      case TOK_SUB: {
+        blob.append(current_segment->str);
+        get_next_segment(lexer_segments, cursor);
+      } break;
       case TOK_VALUE: {
         auto ident = parse_value(lexer_segments, cursor);
         if (!ident.has_value()) {
           RETURN_WITH_WARNING();
         }
+        if (blob.size() != 0) {
+          ident = std::make_unique<ConcatStringsAST>(
+              std::move(ident.value()), std::make_unique<StringExprAST>(blob));
+
+          blob.clear();
+        }
+
         if (last_expr.has_value()) {
           last_expr = std::make_unique<ConcatExprAST>(
-              std::move(last_expr.value()), std::move(ident.value()));
+              std::move(last_expr.value()),
+              std::make_unique<ConvertToRangeArrayExprAST>(
+                  std::move(ident.value())));
         } else {
-          std::vector<std::string> array = {ident.value()->val};
+          std::vector<std::unique_ptr<ExprAST>> array;
+
+          array.push_back(std::move(ident.value()));
+
           last_expr = std::make_unique<RangeArrayExprAST>(array);
         }
       } break;
 
         // skip it
       case TOK_WHITESPACE:
-        [[fallthrough]];
-      case TOK_NEWLINE:
+        if (blob.size() != 0) {
+          last_expr = std::make_unique<ConvertToRangeArrayExprAST>(
+              std::make_unique<StringExprAST>(blob));
+          blob.clear();
+        }
+        get_next_segment(lexer_segments, cursor);
         break;
 
+      case TOK_NEWLINE:
       case TOK_SEMI_COLON:
         // eat it
         get_next_segment(lexer_segments, cursor);
@@ -315,13 +400,23 @@ std::optional<std::unique_ptr<ExprAST>> parse_call_expression(
   }
   get_next_segment(lexer_segments, cursor);  // eat token
 
-  auto args = parse_floating_expression(lexer_segments, cursor);
-  if (!args.has_value()) {
-    RETURN_WITH_WARNING()
-  }
+  if (program_name->str != "expr") {
+    auto args = parse_floating_expression(lexer_segments, cursor);
+    if (!args.has_value()) {
+      RETURN_WITH_WARNING()
+    }
 
-  return std::make_unique<CallExprAST>(program_name->str,
-                                       std::move(args.value()));
+    return std::make_unique<CallExprAST>(program_name->str,
+                                         std::move(args.value()));
+  } else {
+    auto lefthandside = parse_identifier_or_value(lexer_segments, cursor);
+    if (!lefthandside.has_value()) {
+      RETURN_WITH_WARNING()
+    }
+
+    return parse_operator_math_expression(lexer_segments, cursor, 0,
+                                          std::move(lefthandside.value()));
+  }
 }
 
 std::optional<std::unique_ptr<ExprAST>> parse_paren_expression(
@@ -334,9 +429,6 @@ std::optional<std::unique_ptr<ExprAST>> parse_paren_expression(
   get_next_segment(lexer_segments, cursor);  // eat )
   return body;
 }
-
-std::optional<std::unique_ptr<ExprAST>> parse_paren_math_expression(
-    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
 
 std::optional<std::unique_ptr<ExprAST>> parse_operator_math_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
@@ -413,13 +505,17 @@ std::optional<std::unique_ptr<ExprAST>> parse_paren_math_expression(
 std::optional<std::unique_ptr<ForAST>> parse_for(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
   std::optional<BashLexerSegment> current_segment =
-      get_next_segment(lexer_segments, cursor);
+      get_next_segment(lexer_segments, cursor);  // eat for
 
-  std::optional<std::unique_ptr<StringExprAST>> index =
-      parse_value(lexer_segments, cursor);
-  if (!index.has_value()) {
+  skip_whitespace(lexer_segments, cursor);
+
+  current_segment = get_current_segment(lexer_segments, cursor);
+  auto var_tok = get_current_segment(lexer_segments, cursor);
+  if (!current_segment.has_value() || current_segment->token != TOK_VALUE) {
     RETURN_WITH_WARNING();
   }
+
+  get_next_segment(lexer_segments, cursor);
 
   skip_whitespace(lexer_segments, cursor);
 
@@ -442,7 +538,7 @@ std::optional<std::unique_ptr<ForAST>> parse_for(
   }
   current_segment = get_next_segment(lexer_segments, cursor);  // eat do
 
-  auto body = parse_expression(lexer_segments, cursor);
+  auto body = parse_compound_expression(lexer_segments, cursor);
   if (!body.has_value()) {
     RETURN_WITH_WARNING();
   }
@@ -454,10 +550,112 @@ std::optional<std::unique_ptr<ForAST>> parse_for(
     RETURN_WITH_WARNING();
   }
 
-  get_next_segment(lexer_segments, cursor);  // move cursor to continue parsing
-  return std::make_unique<ForAST>(std::move(index.value()->val),
+  get_next_segment(lexer_segments,
+                   cursor);  // move cursor to continue parsing
+  return std::make_unique<ForAST>(std::move(var_tok->str),
                                   std::move(range.value()),
                                   std::move(body.value()));
+}
+
+std::optional<std::unique_ptr<ExprAST>> parse_condition_expression(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
+  skip_whitespace(lexer_segments, cursor);
+
+  std::optional<BashLexerSegment> current_segment =
+      get_current_segment(lexer_segments, cursor);
+
+  if (current_segment->token != TOK_OPEN_SQUARE) {
+    return parse_expression(lexer_segments, cursor);
+  }
+
+  current_segment = get_next_segment(lexer_segments, cursor);
+
+  auto first_op = parse_identifier(lexer_segments, cursor);
+  if (!first_op.has_value()) {
+    RETURN_WITH_WARNING()
+  }
+
+  skip_whitespace(lexer_segments, cursor);
+  current_segment = get_current_segment(lexer_segments, cursor);
+  switch (current_segment->token) {
+    case TOK_SUB: {
+      ConditionExprAST::ConditonOperator op;
+
+      current_segment = get_next_segment(lexer_segments, cursor);
+      if (current_segment->str == "lt") {
+        op = ConditionExprAST::CONDITION_LT;
+      } else if (current_segment->str == "gt") {
+        op = ConditionExprAST::CONDITION_GT;
+      } else if (current_segment->str == "eq") {
+        op = ConditionExprAST::CONDITION_EQ;
+      } else {
+        RETURN_WITH_WARNING()
+      }
+
+      current_segment = get_next_segment(lexer_segments, cursor);
+
+      auto second_op = parse_numeric(lexer_segments, cursor);
+      if (!second_op.has_value()) {
+        RETURN_WITH_WARNING()
+      }
+
+      skip_whitespace(lexer_segments, cursor);
+      current_segment = get_current_segment(lexer_segments, cursor);
+      if (current_segment->token != TOK_CLOSE_SQUARE) {
+        RETURN_WITH_WARNING()
+      }
+      current_segment = get_next_segment(lexer_segments, cursor);  // eat ]
+
+      skip_whitespace(lexer_segments, cursor);
+      current_segment = get_current_segment(lexer_segments, cursor);
+
+      if (current_segment->token == TOK_SEMI_COLON) {
+        get_next_segment(lexer_segments, cursor);
+      }
+
+      return std::make_unique<ConditionExprAST>(std::move(first_op.value()), op,
+                                                std::move(second_op.value()));
+    }
+    default:
+      RETURN_WITH_WARNING()
+  }
+}
+
+std::optional<std::unique_ptr<ExprAST>> parse_while(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
+  std::optional<BashLexerSegment> current_segment =
+      get_next_segment(lexer_segments, cursor);  // eat while
+
+  skip_whitespace(lexer_segments, cursor);
+
+  current_segment = get_current_segment(lexer_segments, cursor);
+
+  auto cond = parse_condition_expression(lexer_segments, cursor);
+
+  skip_whitespace(lexer_segments, cursor);
+
+  current_segment = get_current_segment(lexer_segments, cursor);
+  if (!current_segment.has_value() || current_segment->token != TOK_DO) {
+    RETURN_WITH_WARNING();
+  }
+  current_segment = get_next_segment(lexer_segments, cursor);  // eat do
+
+  auto body = parse_compound_expression(lexer_segments, cursor);
+  if (!body.has_value()) {
+    RETURN_WITH_WARNING();
+  }
+
+  skip_whitespace(lexer_segments, cursor);
+
+  current_segment = get_current_segment(lexer_segments, cursor);
+  if (!current_segment.has_value() || current_segment->token != TOK_DONE) {
+    RETURN_WITH_WARNING();
+  }
+
+  get_next_segment(lexer_segments,
+                   cursor);  // move cursor to continue parsing
+  return std::make_unique<WhileAST>(std::move(cond.value()),
+                                    std::move(body.value()));
 }
 
 // thank you StackOverflow https://stackoverflow.com/a/36120483
@@ -467,12 +665,52 @@ std::unique_ptr<TO> static_unique_pointer_cast(std::unique_ptr<FROM>&& old) {
   // conversion: unique_ptr<FROM>->FROM*->TO*->unique_ptr<TO>
 }
 
+std::optional<std::unique_ptr<ExprAST>> parse_assignment(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
+  auto current_segment = get_current_segment(lexer_segments, cursor);
+  auto var_tok = get_current_segment(lexer_segments, cursor);
+  if (!current_segment.has_value() || current_segment->token != TOK_VALUE) {
+    RETURN_WITH_WARNING();
+  }
+  get_next_segment(lexer_segments, cursor);
+
+  current_segment = get_current_segment(lexer_segments, cursor);
+  if (!current_segment.has_value() || current_segment->token != TOK_EQ) {
+    RETURN_WITH_WARNING()
+  }
+  current_segment = get_next_segment(lexer_segments, cursor);  // eat =
+
+  auto value = parse_value(lexer_segments, cursor);
+  if (!value.has_value()) {
+    RETURN_WITH_WARNING();
+  }
+
+  return std::make_unique<AssignmentExprAST>(var_tok->str,
+                                             std::move(value.value()));
+}
+
+std::optional<std::unique_ptr<ExprAST>> parse_compound_expression(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
+  std::vector<std::unique_ptr<ExprAST>> ret;
+
+  std::optional<std::unique_ptr<ExprAST>> value =
+      parse_expression(lexer_segments, cursor);
+
+  while (value.has_value()) {
+    ret.push_back(std::move(value.value()));
+    value = parse_expression(lexer_segments, cursor);
+  }
+
+  return std::make_unique<CompoundExprAST>(std::move(ret));
+}
+
 std::optional<std::unique_ptr<ExprAST>> parse_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
   std::optional<BashLexerSegment> current_segment =
       get_current_segment(lexer_segments, cursor);
 
   std::optional<std::unique_ptr<ExprAST>> return_expr;
+  std::optional<std::unique_ptr<ExprAST>> last_expr;
   bool done = false;
   while (!done) {
     current_segment = get_current_segment(lexer_segments, cursor);
@@ -480,10 +718,16 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
       RETURN_WITH_WARNING()
     }
 
-    std::optional<BashLexerSegment> next_segment =
-        peek_segment(lexer_segments, cursor);
-
     switch (current_segment->token) {
+      case TOK_WHILE: {
+        auto while_expr = parse_while(lexer_segments, cursor);
+        if (!while_expr.has_value()) {
+          RETURN_WITH_WARNING();
+        }
+        return static_unique_pointer_cast<ExprAST>(
+            std::move(while_expr.value()));
+      }
+
       case TOK_FOR: {
         auto for_expr = parse_for(lexer_segments, cursor);
         if (!for_expr.has_value()) {
@@ -500,7 +744,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
       case TOK_AND_AND: {
         current_segment = get_next_segment(lexer_segments, cursor);  // eat op
 
-        if (!return_expr.has_value()) {
+        if (!last_expr.has_value()) {
           RETURN_WITH_WARNING();
         }
 
@@ -510,13 +754,14 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
         }
 
         return_expr = std::make_unique<StatementOpExprAST>(
-            StatementOpExprAST::STATEMENT_OP_AND,
-            std::move(return_expr.value()), std::move(righthandside.value()));
+            StatementOpExprAST::STATEMENT_OP_AND, std::move(last_expr.value()),
+            std::move(righthandside.value()));
+        last_expr = {};
       } break;
       case TOK_OR_OR: {
         current_segment = get_next_segment(lexer_segments, cursor);  // eat op
 
-        if (!return_expr.has_value()) {
+        if (!last_expr.has_value()) {
           RETURN_WITH_WARNING();
         }
 
@@ -526,32 +771,55 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
         }
 
         return_expr = std::make_unique<StatementOpExprAST>(
-            StatementOpExprAST::STATEMENT_OP_OR, std::move(return_expr.value()),
+            StatementOpExprAST::STATEMENT_OP_OR, std::move(last_expr.value()),
             std::move(righthandside.value()));
+        last_expr = {};
       } break;
       case TOK_VALUE:
         [[fallthrough]];
       case TOK_IDENTIFIER: {
-        auto call = parse_call_expression(lexer_segments, cursor);
-        if (!call.has_value()) {
+        auto next_op = peek_segment(lexer_segments, cursor);
+
+        if (next_op->token != TOK_EQ) {
+          auto call = parse_call_expression(lexer_segments, cursor);
+          if (!call.has_value()) {
+            RETURN_WITH_WARNING()
+          }
+          return_expr = std::move(call.value());
+        } else {
+          return_expr = parse_assignment(lexer_segments, cursor);
+        }
+      } break;
+      case TOK_OPEN_SQUARE: {
+        auto cond = parse_condition_expression(lexer_segments, cursor);
+        if (!cond.has_value()) {
           RETURN_WITH_WARNING()
         }
-        return_expr = std::move(call.value());
+        return_expr = std::move(cond.value());
       } break;
       case TOK_EOF:
-        done = true;
-        break;
-
+        [[fallthrough]];
       case TOK_DONE:
         [[fallthrough]];
       case TOK_CLOSE_PAREN:
         [[fallthrough]];
+      case TOK_BACKTICK:
+        return last_expr;
+
       case TOK_SEMI_COLON:
-        return return_expr;
-        // scraps of a previous expression probably
-      case TOK_WHITESPACE:
         [[fallthrough]];
       case TOK_NEWLINE:
+        if (last_expr.has_value()) {
+          return last_expr;
+        }
+        current_segment = get_next_segment(lexer_segments, cursor);
+        // continue
+        break;
+
+        // scraps of a previous expression probably
+      case TOK_COMMENT:
+        [[fallthrough]];
+      case TOK_WHITESPACE:
         current_segment = get_next_segment(lexer_segments, cursor);
         break;
       default:
@@ -559,12 +827,24 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
         RETURN_WITH_MSG("Can't parse " + current_segment->get_token_name() +
                         " " + current_segment->str);
     }
+    if (return_expr.has_value()) {
+      if (last_expr.has_value()) {
+        std::vector<std::unique_ptr<ExprAST>> expr_array;
+        expr_array.push_back(std::move(last_expr.value()));
+        expr_array.push_back(std::move(return_expr.value()));
+        last_expr = std::make_unique<CompoundExprAST>(std::move(expr_array));
+      } else {
+        last_expr = std::move(return_expr);
+      }
+    }
+    return_expr = {};
   }
 
   // THIS IS A WHOLE MINE FIELD HOLY
   // a=b kind of expression
   // if (next_segment.has_value() && next_segment->token == TOK_EQ) {
-  //   auto variable = std::make_unique<VariableExprAST>(current_segment->str);
+  //   auto variable =
+  //   std::make_unique<VariableExprAST>(current_segment->str);
   //   get_next_segment(lexer_segments, cursor);  // eat the eq
   //   current_segment = get_next_segment(lexer_segments, cursor);
   //   if (!current_segment.has_value()) {

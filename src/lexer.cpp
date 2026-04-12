@@ -14,7 +14,7 @@ bool is_alpha(char c) {
   bool lowercase = ('a' <= c && c <= 'z');
   bool uppercase = ('A' <= c && c <= 'Z');
 
-  return uppercase || lowercase;
+  return uppercase || lowercase || c == '_';
 }
 bool is_numeric(char c) {
   bool num = ('0' <= c && c <= '9');
@@ -26,7 +26,7 @@ bool is_alpha_numeric(char c) {
   bool uppercase = ('A' <= c && c <= 'Z');
   bool num = ('0' <= c && c <= '9');
 
-  return uppercase || lowercase || num;
+  return uppercase || lowercase || num || c == '_';
 }
 bool is_whitespace(char c) { return c == ' ' || c == '\t'; }
 
@@ -47,17 +47,16 @@ std::optional<char> peek_char(const std::string& source, size_t cursor) {
   return {};
 }
 
-BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
-                                               size_t& cursor,
-                                               BashLexerToken prev_token,
-                                               ParenMap& paren_map) {
+std::vector<BashLexerSegment> BashLexerSegment::munch_token(
+    const std::string& source, size_t& cursor, BashLexerToken prev_token,
+    ParenMap& paren_map) {
   ssize_t my_index = paren_map.index_counter;
   paren_map.index_counter++;
   std::string token = "";
 
   std::optional<char> current_char = read_char(source, cursor, token);
   if (!current_char.has_value()) {
-    return BashLexerSegment(TOK_EOF, token);
+    return {BashLexerSegment(TOK_EOF, token)};
   }
 
   if (is_whitespace(current_char.value())) {
@@ -67,15 +66,15 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
       next_char = peek_char(source, cursor);
     }
 
-    return BashLexerSegment(TOK_WHITESPACE, token);
-  } else if (prev_token == TOK_EQ) {
-    std::optional<char> next_char = peek_char(source, cursor);
+    return {BashLexerSegment(TOK_WHITESPACE, token)};
+  } else if (prev_token == TOK_EQ && is_alpha_numeric(current_char.value())) {
+    std::optional<char> next_char = current_char;
     while (next_char.has_value() && is_alpha_numeric(next_char.value())) {
       current_char = read_char(source, cursor, token);
       next_char = peek_char(source, cursor);
     }
 
-    return BashLexerSegment(TOK_VALUE, token);
+    return {BashLexerSegment(TOK_VALUE, token)};
   } else if (is_alpha(current_char.value()) ||
              current_char == '$') {  // value, identifier, or keyword
     std::optional<char> next_char = peek_char(source, cursor);
@@ -86,25 +85,27 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
 
     if (!next_char.has_value() || next_char.value() != '=') {
       if (token == "if")
-        return BashLexerSegment(TOK_IF, token);
+        return {BashLexerSegment(TOK_IF, token)};
       else if (token == "fi")
-        return BashLexerSegment(TOK_FI, token);
+        return {BashLexerSegment(TOK_FI, token)};
       else if (token == "do")
-        return BashLexerSegment(TOK_DO, token);
+        return {BashLexerSegment(TOK_DO, token)};
       else if (token == "in")
-        return BashLexerSegment(TOK_IN, token);
+        return {BashLexerSegment(TOK_IN, token)};
       else if (token == "done")
-        return BashLexerSegment(TOK_DONE, token);
+        return {BashLexerSegment(TOK_DONE, token)};
       else if (token == "for")
-        return BashLexerSegment(TOK_FOR, token);
+        return {BashLexerSegment(TOK_FOR, token)};
+      else if (token == "while")
+        return {BashLexerSegment(TOK_WHILE, token)};
       // TODO: finish the LUT
     }
 
     if (token.starts_with("$")) {
-      return BashLexerSegment(TOK_IDENTIFIER,
-                              token.substr(1, token.size() - 1));
+      return {
+          BashLexerSegment(TOK_IDENTIFIER, token.substr(1, token.size() - 1))};
     } else {
-      return BashLexerSegment(TOK_VALUE, token);
+      return {BashLexerSegment(TOK_VALUE, token)};
     }
   } else if (is_numeric(current_char.value())) {
     std::optional<char> next_char = peek_char(source, cursor);
@@ -114,12 +115,12 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
     }
 
     if (next_char != '.') {
-      return BashLexerSegment(TOK_NUMERIC, token);
+      return {BashLexerSegment(TOK_NUMERIC, token)};
     }
     std::optional<char> next_next_char = peek_char(source, cursor);
     if (next_next_char.has_value() &&
         next_next_char.value() == '.') {  // no double dot
-      return BashLexerSegment(TOK_NUMERIC, token);
+      return {BashLexerSegment(TOK_NUMERIC, token)};
     }
 
     current_char = read_char(source, cursor, token);
@@ -130,15 +131,18 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
       next_char = peek_char(source, cursor);
     }
 
-    return BashLexerSegment(TOK_NUMERIC, token);
+    return {BashLexerSegment(TOK_NUMERIC, token)};
 
   } else if (current_char == '#') {
     std::optional<char> next_char = peek_char(source, cursor);
     while (next_char.has_value() && next_char.value() != '\n') {
       current_char = read_char(source, cursor, token);
+      next_char = peek_char(source, cursor);
     }
-    return BashLexerSegment(TOK_COMMENT, token);
-  } else if (current_char == '\'') {
+    return {BashLexerSegment(TOK_COMMENT, token)};
+  } else if (current_char == '\'' || current_char == '"') {
+    auto start_char = current_char;
+    std::vector<BashLexerSegment> ret;
     std::string inner_text = "";
     bool escaping = false;
     do {
@@ -146,93 +150,129 @@ BashLexerSegment BashLexerSegment::munch_token(const std::string& source,
 
       if (current_char == '\\' && !escaping) {
         escaping = true;
-      } else if (current_char == '\'' && !escaping) {
+      } else if (current_char == start_char && !escaping) {
       } else {
-        inner_text.push_back(current_char.value());
+        if (current_char == '$' && !escaping) {
+          ret.push_back(BashLexerSegment(TOK_VALUE, inner_text));
+          inner_text.clear();
+
+          auto next_char = peek_char(source, cursor);
+          while (next_char.has_value() && is_alpha_numeric(next_char.value())) {
+            current_char = read_char(source, cursor, token);
+            inner_text.push_back(current_char.value());
+            next_char = peek_char(source, cursor);
+          }
+
+          ret.push_back(BashLexerSegment(TOK_IDENTIFIER, inner_text));
+          inner_text.clear();
+        } else {
+          inner_text.push_back(current_char.value());
+        }
         escaping = false;  // we're done escaping
       }
+    } while (!(current_char == start_char && !escaping));
+    ret.push_back(BashLexerSegment(TOK_VALUE, inner_text));
 
-    } while (!(current_char == '\'' && !escaping));
-
-    return BashLexerSegment(TOK_VALUE, inner_text);
+    return ret;
   } else if (current_char == '=') {
     std::optional<char> next_char = peek_char(source, cursor);
     if (next_char.value() == '=') {  // ==
       current_char = read_char(source, cursor, token);
-      return BashLexerSegment(TOK_EQ_EQ, token);
+      return {BashLexerSegment(TOK_EQ_EQ, token)};
     }
-    return BashLexerSegment(TOK_EQ, token);
+    return {BashLexerSegment(TOK_EQ, token)};
   } else if (current_char == '<') {
     std::optional<char> next_char = peek_char(source, cursor);
     if (next_char.value() == '=') {  // <=
       current_char = read_char(source, cursor, token);
-      return BashLexerSegment(TOK_LESS_EQ, token);
+      return {BashLexerSegment(TOK_LESS_EQ, token)};
     }
-    return BashLexerSegment(TOK_LESS, token);
+    return {BashLexerSegment(TOK_LESS, token)};
   } else if (current_char == '>') {
     std::optional<char> next_char = peek_char(source, cursor);
     if (next_char.value() == '=') {  // >=
       current_char = read_char(source, cursor, token);
-      return BashLexerSegment(TOK_GREATER_EQ, token);
+      return {BashLexerSegment(TOK_GREATER_EQ, token)};
     }
-    return BashLexerSegment(TOK_GREATER, token);
+    return {BashLexerSegment(TOK_GREATER, token)};
   } else if (current_char == '&') {
     std::optional<char> next_char = peek_char(source, cursor);
     if (next_char.value() == '&') {  // &&
       current_char = read_char(source, cursor, token);
-      return BashLexerSegment(TOK_AND_AND, token);
+      return {BashLexerSegment(TOK_AND_AND, token)};
     }
-    return BashLexerSegment(TOK_AND, token);
+    return {BashLexerSegment(TOK_AND, token)};
+  } else if (current_char == '!') {
+    std::optional<char> next_char = peek_char(source, cursor);
+    if (next_char.value() == '=') {  // !=
+      current_char = read_char(source, cursor, token);
+      return {BashLexerSegment(TOK_NOT_EQ, token)};
+    }
+    return {BashLexerSegment(TOK_BANG, token)};
   } else if (current_char == '|') {
     std::optional<char> next_char = peek_char(source, cursor);
     if (next_char.value() == '|') {  // ||
       current_char = read_char(source, cursor, token);
-      return BashLexerSegment(TOK_OR_OR, token);
+      return {BashLexerSegment(TOK_OR_OR, token)};
     }
-    return BashLexerSegment(TOK_OR, token);
+    return {BashLexerSegment(TOK_OR, token)};
   } else if (current_char == '.') {
     std::optional<char> next_char = peek_char(source, cursor);
     if (next_char.value() == '.') {  // ..
       current_char = read_char(source, cursor, token);
-      return BashLexerSegment(TOK_RANGE, token);
+      return {BashLexerSegment(TOK_RANGE, token)};
     }
     printf("ERROR: Single period is unacceptable\n");
-    return BashLexerSegment(TOK_UNK, token);
+    return {BashLexerSegment(TOK_UNK, token)};
   } else if (current_char == '(') {
     paren_map.level_counter++;
     paren_map.relevant_indices.push_back(
         {my_index, paren_map.level_counter, true});
     paren_map.level_map[paren_map.level_counter] = {my_index, true};
-    return BashLexerSegment(TOK_OPEN_PAREN, token);
+    return {BashLexerSegment(TOK_OPEN_PAREN, token)};
   } else if (current_char == ')') {
     paren_map.relevant_indices.push_back(
         {my_index, paren_map.level_counter, false});
-    paren_map.close_map[paren_map.level_map[paren_map.level_counter]->first] =
-        my_index;
+    if (paren_map.level_map.contains(paren_map.level_counter)) {
+      paren_map.close_map[paren_map.level_map[paren_map.level_counter]->first] =
+          my_index;
+    }
     paren_map.level_map[paren_map.level_counter] = {};
     paren_map.level_counter--;
 
-    return BashLexerSegment(TOK_CLOSE_PAREN, token);
+    return {BashLexerSegment(TOK_CLOSE_PAREN, token)};
   } else if (current_char == '[') {
-    return BashLexerSegment(TOK_OPEN_SQUARE, token);
+    return {BashLexerSegment(TOK_OPEN_SQUARE, token)};
   } else if (current_char == ']') {
-    return BashLexerSegment(TOK_CLOSE_SQUARE, token);
+    return {BashLexerSegment(TOK_CLOSE_SQUARE, token)};
   } else if (current_char == '{') {
-    return BashLexerSegment(TOK_OPEN_CURLY, token);
+    return {BashLexerSegment(TOK_OPEN_CURLY, token)};
   } else if (current_char == '}') {
-    return BashLexerSegment(TOK_CLOSE_CURLY, token);
+    return {BashLexerSegment(TOK_CLOSE_CURLY, token)};
+  } else if (current_char == '`') {
+    return {BashLexerSegment(TOK_BACKTICK, token)};
+  } else if (current_char == ':') {
+    return {BashLexerSegment(TOK_COLON, token)};
   } else if (current_char == '%') {
-    return BashLexerSegment(TOK_MOD, token);
+    return {BashLexerSegment(TOK_MOD, token)};
+  } else if (current_char == '-') {
+    return {BashLexerSegment(TOK_SUB, token)};
+  } else if (current_char == '+') {
+    return {BashLexerSegment(TOK_ADD, token)};
+  } else if (current_char == '*') {
+    return {BashLexerSegment(TOK_MUL, token)};
+  } else if (current_char == '/') {
+    return {BashLexerSegment(TOK_DIV, token)};
   } else if (current_char == ',') {
-    return BashLexerSegment(TOK_COMMA, token);
+    return {BashLexerSegment(TOK_COMMA, token)};
   } else if (current_char == ';') {
-    return BashLexerSegment(TOK_SEMI_COLON, token);
+    return {BashLexerSegment(TOK_SEMI_COLON, token)};
   } else if (current_char == '\n') {
-    return BashLexerSegment(TOK_NEWLINE, token);
+    return {BashLexerSegment(TOK_NEWLINE, token)};
   }
 
   printf("ERROR: Unknown token: %s\n", token.c_str());
-  return BashLexerSegment(TOK_UNK, token);
+  return {BashLexerSegment(TOK_UNK, token)};
 }
 
 std::vector<BashLexerSegment> paren_map_fusing(
@@ -286,8 +326,19 @@ std::string BashLexerSegment::get_token_name() {
 // https://en.cppreference.com/w/c/language/operator_precedence.html
 int16_t BashLexerSegment::get_token_precidence() {
   switch (token) {
+    case TOK_ADD:
+      [[fallthrough]];
+    case TOK_SUB:
+      return 40;
+
+    case TOK_MUL:
+      [[fallthrough]];
+    case TOK_DIV:
+      return 30;
+
     case TOK_MOD:
       return 20;
+
     case TOK_EQ_EQ:
       return 10;
     default:
@@ -298,6 +349,16 @@ int16_t BashLexerSegment::get_token_precidence() {
 
 MathOp BashLexerSegment::get_math_op() {
   switch (token) {
+    case TOK_ADD:
+      return OP_ADD;
+    case TOK_SUB:
+      return OP_SUB;
+
+    case TOK_MUL:
+      return OP_MUL;
+    case TOK_DIV:
+      return OP_DIV;
+
     case TOK_MOD:
       return OP_MOD;
     case TOK_EQ_EQ:

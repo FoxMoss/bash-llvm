@@ -48,9 +48,10 @@ class BashLexerSegment {
   int16_t get_token_precidence();
   MathOp get_math_op();
 
-  static BashLexerSegment munch_token(const std::string& source, size_t& cursor,
-                                      BashLexerToken prev_token,
-                                      ParenMap& paren_map);
+  static std::vector<BashLexerSegment> munch_token(const std::string& source,
+                                                   size_t& cursor,
+                                                   BashLexerToken prev_token,
+                                                   ParenMap& paren_map);
 
  private:
 };

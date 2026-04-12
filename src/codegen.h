@@ -15,7 +15,7 @@ struct CodegenState {
   std::unique_ptr<llvm::LLVMContext> context;
   std::unique_ptr<llvm::IRBuilder<>> builder;
   std::unique_ptr<llvm::Module> module;
-  std::map<std::string, llvm::Value*> named_values;
+  std::map<std::string, std::optional<llvm::Value*>> named_values;
   llvm::Function* entry;
 
   void generate_standard_library() {
@@ -39,6 +39,28 @@ struct CodegenState {
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
                              "str_to_float", module.get());
+    }
+
+    {
+      std::vector<llvm::Type*> bash_func_args = {
+          llvm::PointerType::get(*this->context, 0)};
+
+      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+          llvm::Type::getInt64Ty(*context), bash_func_args, false);
+
+      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                             "str_to_len", module.get());
+    }
+
+    {
+      std::vector<llvm::Type*> bash_func_args = {
+          llvm::Type::getInt64Ty(*context)};
+
+      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+          llvm::Type::getInt64Ty(*context), bash_func_args, false);
+
+      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                             "int_log", module.get());
     }
   }
 

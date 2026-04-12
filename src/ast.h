@@ -193,10 +193,14 @@ class MathOpExprAST : public ExprAST {
 };
 
 class RangeArrayExprAST : public ExprAST {
-  std::vector<std::string> values;
+  std::vector<std::unique_ptr<ExprAST>> values;
 
  public:
-  RangeArrayExprAST(const std::vector<std::string>& values) : values(values) {}
+  RangeArrayExprAST(std::vector<std::unique_ptr<ExprAST>>& c_values) {
+    for (auto& c_val : c_values) {
+      values.push_back(std::move(c_val));
+    }
+  }
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -206,7 +210,11 @@ class RangeArrayExprAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("RangeArrayExprAST {}\n", values);
+    std::print("RangeArrayExprAST\n");
+
+    for (auto& val : values) {
+      val->print_name(level + 1);
+    }
   }
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
@@ -297,9 +305,36 @@ class AssignmentExprAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("AssignmentExprAST \"{}\"\n", level);
+    std::print("AssignmentExprAST \"{}\"\n", identifier);
 
     value->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
+class CompoundExprAST : public ExprAST {
+  std::vector<std::unique_ptr<ExprAST>> exprs;
+
+ public:
+  CompoundExprAST(std::vector<std::unique_ptr<ExprAST>> exprs)
+      : exprs(std::move(exprs)) {}
+
+  void push(std::unique_ptr<ExprAST> expr) { exprs.push_back(std::move(expr)); }
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("CompoundExprAST\n");
+
+    for (auto& expr : exprs) {
+      expr->print_name(level + 1);
+    }
   }
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
@@ -334,6 +369,99 @@ class ForAST : public ExprAST {
       CodegenState& state) override;
 };
 
+class ConditionExprAST : public ExprAST {
+ public:
+  enum ConditonOperator {
+    CONDITION_LT,
+    CONDITION_GT,
+    CONDITION_EQ,
+  };
+
+ private:
+  std::unique_ptr<ExprAST> first_var;
+  ConditonOperator op;
+  std::unique_ptr<ExprAST> second_var;
+
+ public:
+  ConditionExprAST(std::unique_ptr<ExprAST> first_var, ConditonOperator op,
+                   std::unique_ptr<ExprAST> second_var)
+      : first_var(std::move(first_var)),
+        op(op),
+        second_var(std::move(second_var)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("ConditionExprAST {}\n", (int)op);
+
+    first_var->print_name(level + 1);
+    second_var->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
+class WhileAST : public ExprAST {
+  std::unique_ptr<ExprAST> condition;
+  std::unique_ptr<ExprAST> body;
+
+ public:
+  WhileAST(std::unique_ptr<ExprAST> condition, std::unique_ptr<ExprAST> body)
+      : condition(std::move(condition)), body(std::move(body)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("WhileAST\n");
+
+    condition->print_name(level + 1);
+    body->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
+class ConcatStringsAST : public ExprAST {
+  std::unique_ptr<ExprAST> str1;
+  std::unique_ptr<ExprAST> str2;
+
+ public:
+  ConcatStringsAST(std::unique_ptr<ExprAST> str1, std::unique_ptr<ExprAST> str2)
+      : str1(std::move(str1)), str2(std::move(str2)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("ConcatStringsAST\n");
+
+    str1->print_name(level + 1);
+    str2->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
+std::optional<std::unique_ptr<ExprAST>> parse_compound_expression(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
 std::optional<std::unique_ptr<ExprAST>> parse_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
-
+std::optional<std::unique_ptr<ExprAST>> parse_paren_math_expression(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
+std::optional<std::unique_ptr<ExprAST>> parse_operator_math_expression(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
+    int lhs_prec, std::unique_ptr<ExprAST> lefthandside);

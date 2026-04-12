@@ -2,6 +2,7 @@ add_executable(llsh
  main.cpp
  lexer.cpp
  ast.cpp
+ codegen.cpp
 )
 
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic -fsanitize=address)

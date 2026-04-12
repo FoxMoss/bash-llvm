@@ -1,3 +1,7 @@
  OP(OP_MOD)
  OP(OP_EQ_EQ)
+ OP(OP_ADD)
+ OP(OP_SUB)
+ OP(OP_DIV)
+ OP(OP_MUL)
  OP(OP_UNK)
