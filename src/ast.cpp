@@ -353,34 +353,11 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
       } break;
       case TOK_NUMERIC:
         [[fallthrough]];
-      case TOK_SUB: {
+      case TOK_SUB:
+        [[fallthrough]];
+      case TOK_VALUE: {
         blob.append(current_segment->str);
         get_next_segment(lexer_segments, cursor);
-      } break;
-      case TOK_VALUE: {
-        auto ident = parse_value(lexer_segments, cursor);
-        if (!ident.has_value()) {
-          RETURN_WITH_WARNING();
-        }
-        if (blob.size() != 0) {
-          ident = std::make_unique<ConcatStringsAST>(
-              std::move(ident.value()), std::make_unique<StringExprAST>(blob));
-
-          blob.clear();
-        }
-
-        if (last_expr.has_value()) {
-          last_expr = std::make_unique<ConcatExprAST>(
-              std::move(last_expr.value()),
-              std::make_unique<ConvertToRangeArrayExprAST>(
-                  std::move(ident.value())));
-        } else {
-          std::vector<std::unique_ptr<ExprAST>> array;
-
-          array.push_back(std::move(ident.value()));
-
-          last_expr = std::make_unique<RangeArrayExprAST>(array);
-        }
       } break;
       case TOK_INJECT_STR: {
         get_next_segment(lexer_segments, cursor);  // eat $(
@@ -389,8 +366,18 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           RETURN_WITH_WARNING();
         }
 
-        auto inject_command = std::make_unique<InjectIntoStringAST>(
-            std::move(injected_str.value()));
+        std::unique_ptr<ExprAST> inject_command =
+            std::make_unique<ConvertToRangeArrayExprAST>(
+                std::make_unique<InjectIntoStringAST>(
+                    std::move(injected_str.value())));
+
+        if (blob.size() != 0) {
+          inject_command = std::make_unique<ConcatExprAST>(
+              std::make_unique<ConvertToRangeArrayExprAST>(
+                  std::make_unique<StringExprAST>(blob)),
+              std::move(inject_command));
+          blob.clear();
+        }
 
         skip_whitespace_and_newline(lexer_segments, cursor);
         auto close_paren = get_current_segment(lexer_segments, cursor);
@@ -401,22 +388,30 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
 
         if (last_expr.has_value()) {
           last_expr = std::make_unique<ConcatExprAST>(
-              std::move(last_expr.value()),
-              std::make_unique<ConvertToRangeArrayExprAST>(
-                  std::move(inject_command)));
+              std::move(last_expr.value()), std::move(inject_command));
         } else {
-          last_expr = std::make_unique<ConvertToRangeArrayExprAST>(
-              std::move(inject_command));
+          last_expr = std::move(inject_command);
         }
       } break;
 
         // skip it
       case TOK_WHITESPACE:
         if (blob.size() != 0) {
-          last_expr = std::make_unique<ConvertToRangeArrayExprAST>(
-              std::make_unique<StringExprAST>(blob));
-          blob.clear();
+          auto value = std::make_unique<StringExprAST>(blob);
+
+          if (last_expr.has_value()) {
+            last_expr = std::make_unique<ConcatExprAST>(
+                std::move(last_expr.value()),
+                std::make_unique<ConvertToRangeArrayExprAST>(std::move(value)));
+          } else {
+            std::vector<std::unique_ptr<ExprAST>> array;
+
+            array.push_back(std::move(value));
+
+            last_expr = std::make_unique<RangeArrayExprAST>(array);
+          }
         }
+
         get_next_segment(lexer_segments, cursor);
         break;
 
@@ -549,16 +544,9 @@ std::optional<std::unique_ptr<ExprAST>> parse_operator_math_expression(
       }
     }
 
-    if (lefthandside->get_ident_str().has_value() &&
-        binop->get_math_op() == OP_EQ) {
-      lefthandside = std::make_unique<AssignmentExprAST>(
-          lefthandside->get_ident_str().value(),
-          std::move(righthandside.value()));
-    } else {
-      lefthandside = std::make_unique<MathOpExprAST>(
-          binop->get_math_op(), std::move(lefthandside),
-          std::move(righthandside.value()));
-    }
+    lefthandside = std::make_unique<MathOpExprAST>(
+        binop->get_math_op(), std::move(lefthandside),
+        std::move(righthandside.value()));
   }
 
   RETURN_WITH_WARNING()
@@ -1139,6 +1127,16 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
         RETURN_WITH_MSG("Can't parse " + current_segment->get_token_name() +
                         " " + current_segment->str);
     }
+
+    skip_whitespace(lexer_segments, cursor);
+
+    auto next_segment = get_current_segment(lexer_segments, cursor);
+    if (next_segment->token != TOK_OR_OR &&
+        next_segment->token != TOK_AND_AND && next_segment->token != TOK_OR &&
+        next_segment->token != TOK_AND && return_expr.has_value()) {
+      return return_expr;
+    }
+
     if (return_expr.has_value()) {
       if (last_expr.has_value()) {
         std::vector<std::unique_ptr<ExprAST>> expr_array;
@@ -1151,18 +1149,6 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
     }
     return_expr = {};
   }
-
-  // THIS IS A WHOLE MINE FIELD HOLY
-  // a=b kind of expression
-  // if (next_segment.has_value() && next_segment->token == TOK_EQ) {
-  //   auto variable =
-  //   std::make_unique<VariableExprAST>(current_segment->str);
-  //   get_next_segment(lexer_segments, cursor);  // eat the eq
-  //   current_segment = get_next_segment(lexer_segments, cursor);
-  //   if (!current_segment.has_value()) {
-  //     return {};
-  //   }
-  // }
 
   RETURN_WITH_MSG("Can't parse " + current_segment->get_token_name());
 }

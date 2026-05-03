@@ -116,6 +116,7 @@ int main(int argc, char* argv[]) {
   if (!runtime_pop_output_stack(state).has_value()) {
     printf("Error while popping stack\n");
   }
+  state.free_variable_memory(state.named_values["variable_memory"].value());
 
   state.builder->CreateRetVoid();
 

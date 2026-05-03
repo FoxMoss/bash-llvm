@@ -67,16 +67,9 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     }
 
     return {BashLexerSegment(TOK_WHITESPACE, token)};
-  } else if (prev_token == TOK_EQ && is_alpha_numeric(current_char.value())) {
-    std::optional<char> next_char = peek_char(source, cursor);
-    while (next_char.has_value() && is_alpha_numeric(next_char.value())) {
-      current_char = read_char(source, cursor, token);
-      next_char = peek_char(source, cursor);
-    }
-
-    return {BashLexerSegment(TOK_VALUE, token)};
-  } else if (is_alpha(current_char.value()) ||
-             current_char == '$') {  // value, identifier, or keyword
+  }
+  if (is_alpha(current_char.value()) ||
+      current_char == '$') {  // value, identifier, or keyword
     std::optional<char> next_char = peek_char(source, cursor);
     while (next_char.has_value() && is_alpha_numeric(next_char.value())) {
       current_char = read_char(source, cursor, token);

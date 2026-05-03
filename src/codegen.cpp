@@ -6,6 +6,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
@@ -39,7 +40,6 @@ std::expected<llvm::Value*, std::string> StringExprAST::codegen(
     CodegenState& state) {
   return state.builder->CreateGlobalString(val);
 }
-
 std::expected<llvm::Value*, std::string> store_variable_memory(
     CodegenState& state, std::string name, llvm::Value* value) {
   if (!state.named_values["variable_memory"].has_value()) {
@@ -61,7 +61,8 @@ std::expected<llvm::Value*, std::string> store_variable_memory(
       state.named_values["variable_memory"].value(),
       state.builder->CreateGlobalString(name),
       llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
-                             name.size(), value, str_length.value())};
+                             name.size()),
+      value, str_length.value()};
 
   return state.builder->CreateCall(program_called, arg_values);
 }
@@ -132,20 +133,16 @@ std::expected<llvm::Value*, std::string> cast_to_str(CodegenState& state,
     auto int_val = cast_to_int(state, val);
     UNWRAP_EXPECTED(int_val)
 
-    llvm::Function* program_called = state.module->getFunction("int_log");
+    llvm::Function* program_called = state.module->getFunction("int_len");
     if (!program_called) return std::unexpected("Unknown function referenced");
 
     // If argument mismatch error.
     if (program_called->arg_size() != 1)
-      return std::unexpected("Program str_to_len is illdefined");
+      return std::unexpected("Program int_len is illdefined");
 
     std::vector<llvm::Value*> arg_values = {int_val.value()};
 
     auto int_len = state.builder->CreateCall(program_called, arg_values);
-
-    auto index_start = state.builder->CreateSub(
-        int_len,
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1));
 
     auto int_len_padded = state.builder->CreateAdd(
         int_len,
@@ -154,78 +151,16 @@ std::expected<llvm::Value*, std::string> cast_to_str(CodegenState& state,
     auto stack_str = state.builder->CreateAlloca(
         llvm::Type::getInt8Ty(*state.context), int_len_padded);
 
-    llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
-    llvm::BasicBlock* header = state.builder->GetInsertBlock();
-    auto accumulator = llvm::BasicBlock::Create(
-        *state.context, "tostraccumulator", parent_func);
-    auto merge = llvm::BasicBlock::Create(*state.context, "tostrmerge");
-    state.builder->CreateBr(accumulator);
-    state.builder->SetInsertPoint(accumulator);
+    program_called = state.module->getFunction("int_to_str");
+    if (!program_called) return std::unexpected("Unknown function referenced");
 
-    // https://www.desmos.com/calculator/hybpqxttsn
+    // If argument mismatch error.
+    if (program_called->arg_size() != 3)
+      return std::unexpected("Program int_to_str is illdefined");
 
-    llvm::PHINode* divisor = state.builder->CreatePHI(
-        llvm::Type::getInt64Ty(*state.context), 2, "divisor");
-    divisor->addIncoming(
-        // 2 just to offset the fact that we'll be 2 off from the lowest digit
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1),
-        header);
+    arg_values = {int_val.value(), stack_str, int_len_padded};
 
-    llvm::PHINode* index = state.builder->CreatePHI(
-        llvm::Type::getInt64Ty(*state.context), 2, "index");
-    index->addIncoming(
-        // 2 just to offset the fact that we'll be 2 off from the lowest digit
-        index_start, header);
-
-    // rounded towards 0
-    auto digit_with_bonus = state.builder->CreateSDiv(int_val.value(), divisor);
-
-    auto digit = state.builder->CreateIntCast(
-        state.builder->CreateSRem(
-            digit_with_bonus,
-            llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 10)),
-        llvm::Type::getInt8Ty(*state.context), true);
-
-    auto digit_c = state.builder->CreateAdd(
-        digit,
-        llvm::ConstantInt::get(llvm::Type::getInt8Ty(*state.context), '0'));
-
-    auto char_ptr = state.builder->CreateGEP(
-        llvm::Type::getInt8Ty(*state.context), stack_str,
-        llvm::ArrayRef<llvm::Value*>(index));
-
-    state.builder->CreateStore(digit_c, char_ptr);
-
-    auto next_div = state.builder->CreateMul(
-        divisor,
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 10));
-
-    auto next_index = state.builder->CreateSub(
-        index,
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1));
-
-    auto is_done = state.builder->CreateICmpSLE(
-        index,
-        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 0));
-
-    divisor->addIncoming(next_div, accumulator);
-    index->addIncoming(next_index, accumulator);
-
-    state.builder->CreateCondBr(is_done, merge, accumulator);
-
-    accumulator = state.builder->GetInsertBlock();
-
-    parent_func->insert(parent_func->end(), merge);
-    state.builder->SetInsertPoint(merge);
-
-    auto null_ptr = state.builder->CreateGEP(
-        llvm::Type::getInt8Ty(*state.context), stack_str,
-        llvm::ArrayRef<llvm::Value*>(int_len));
-
-    state.builder->CreateStore(
-        llvm::ConstantInt::get(llvm::Type::getInt8Ty(*state.context), 0),
-        null_ptr);
-
+    state.builder->CreateCall(program_called, arg_values);
     return stack_str;
   }
   return std::unexpected("Type not support for str conversion");
@@ -518,6 +453,22 @@ std::expected<llvm::Value*, std::string> MathOpExprAST::codegen(
       UNWRAP_EXPECTED(stored)
 
       return added_val;
+    }
+    case OP_EQ: {
+      auto ident_name = first->get_ident_str();
+
+      if (!ident_name.has_value()) {
+        return std::unexpected("Equals need a valid identifier first argument");
+      }
+
+      auto right_str = cast_to_str(state, right_val.value());
+      UNWRAP_EXPECTED(right_str)
+
+      auto stored =
+          store_variable_memory(state, ident_name.value(), right_str.value());
+      UNWRAP_EXPECTED(stored)
+
+      return right_str;
     }
 
     default:
@@ -892,13 +843,8 @@ std::expected<llvm::Value*, std::string> AssignmentExprAST::codegen(
   auto val_str = cast_to_str(state, val.value());
   UNWRAP_EXPECTED(val_str)
 
-  if (!state.named_values[identifier].has_value()) {
-    state.named_values[identifier] =
-        state.builder->CreateAlloca(llvm::PointerType::get(*state.context, 0));
-  }
-
-  state.builder->CreateStore(val_str.value(),
-                             state.named_values[identifier].value());
+  auto stored = store_variable_memory(state, identifier, val_str.value());
+  UNWRAP_EXPECTED(stored)
 
   return val_str.value();
 }
@@ -918,9 +864,6 @@ std::expected<llvm::Value*, std::string> CStyleForExprAST::codegen(
 
   state.builder->SetInsertPoint(loop);
 
-  auto incremented = increment->codegen(state);
-  UNWRAP_EXPECTED(incremented)
-
   auto cond_check = check->codegen(state);
   UNWRAP_EXPECTED(cond_check)
 
@@ -931,6 +874,9 @@ std::expected<llvm::Value*, std::string> CStyleForExprAST::codegen(
 
   auto body_val = body.value()->codegen(state);
   UNWRAP_EXPECTED(body_val);
+
+  auto incremented = increment->codegen(state);
+  UNWRAP_EXPECTED(incremented)
 
   state.builder->CreateBr(loop);
 

@@ -68,7 +68,19 @@ struct CodegenState {
           llvm::Type::getInt64Ty(*context), bash_func_args, false);
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "int_log", module.get());
+                             "int_len", module.get());
+    }
+
+    {
+      std::vector<llvm::Type*> bash_func_args = {
+          llvm::Type::getInt64Ty(*context), llvm::PointerType::get(*context, 0),
+          llvm::Type::getInt64Ty(*context)};
+
+      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+          llvm::Type::getVoidTy(*context), bash_func_args, false);
+
+      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                             "int_to_str", module.get());
     }
 
     {
@@ -178,6 +190,22 @@ struct CodegenState {
     auto var_mem = builder->CreateCall(program_called, {});
 
     named_values["variable_memory"] = var_mem;
+  }
+  void free_variable_memory(llvm::Value* var_mem) {
+    llvm::Function* program_called =
+        module->getFunction("free_variable_memory");
+    if (!program_called) {
+      fprintf(stderr, "Issue finding free_variable_memory\n");
+      return;
+    }
+
+    // If argument mismatch error.
+    if (program_called->arg_size() != 1) {
+      fprintf(stderr, "free_variable_memory is illdefined\n");
+      return;
+    }
+
+    builder->CreateCall(program_called, {var_mem});
   }
 
   CodegenState(std::vector<std::string> function_protypes) {

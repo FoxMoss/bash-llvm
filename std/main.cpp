@@ -20,6 +20,8 @@ struct OutputFactor {
                     // gaps otherwise checking fails
   } location;
 
+  std::map<std::string, std::string> positional_arguments;
+
   std::optional<std::string> storage;
 };
 
@@ -86,18 +88,52 @@ void bash_printf(void* var_mem, uint64_t argc, char** argv) {
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
 
+  if (argc == 0) {
+    return;
+  }
+
+  std::string out_string = "";
+  std::string format_string = argv[0];
+
+  bool percenting = false;
+  uint64_t argument_iter = 1;
+  for (char c : format_string) {
+    if (percenting) {
+      if (c == '%') {
+        out_string.push_back('%');
+      } else if (c == 'd') {
+        if (argument_iter < argc) {
+          out_string.append(argv[argument_iter]);
+        } else {
+          out_string.append("0");
+        }
+        argument_iter++;
+      } else if (c == 's') {
+        if (argument_iter < argc) {
+          out_string.append(argv[argument_iter]);
+        } else {
+          out_string.append("");
+        }
+        argument_iter++;
+      }
+
+      percenting = false;
+    } else {
+      if (c == '%') {
+        percenting = true;
+        continue;
+      }
+
+      out_string.push_back(c);
+    }
+  }
+
   if (var_mem_usable->output_stack.size() == 0) return;
 
   switch (
       var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
     case OutputFactor::OUTPUT_STDOUT:
-      for (uint64_t i = 0; i < argc; i++) {
-        printf("%s", argv[i]);
-        if (i != argc - 1) {
-          printf(" ");
-        }
-      }
-      printf("\n");
+      printf("%s", out_string.c_str());
       break;
 
     case OutputFactor::OUTPUT_STR:
@@ -107,29 +143,39 @@ void bash_printf(void* var_mem, uint64_t argc, char** argv) {
             "";
       }
 
-      for (uint64_t i = 0; i < argc; i++) {
-        var_mem_usable->output_stack[var_mem_usable->stack_iterator]
-            .storage.value() += argv[i];
-        if (i != argc - 1) {
-          var_mem_usable->output_stack[var_mem_usable->stack_iterator]
-              .storage.value() += " ";
-        }
-      }
       var_mem_usable->output_stack[var_mem_usable->stack_iterator]
-          .storage.value() += "\n";
+          .storage.value() += out_string;
       break;
     case OutputFactor::OUTPUT_UNK:
       break;
   }
 }
 
-float str_to_float(char* str) { return std::strtof(str, NULL); }
+float str_to_float(char* str) {
+  auto val = std::strtof(str, NULL);
+  if (errno == ERANGE) {
+    return 0;
+  }
+  return val;
+}
 size_t str_to_len(char* str) { return std::strlen(str); }
-size_t int_log(uint64_t i) {
-  return std::floor(std::max(std::log10((double)i) + 1, 1.0));
+size_t int_len(int64_t i) {
+  size_t len = std::floor(std::max(std::log10(std::abs((double)i)) + 1, 1.0));
+  if (i < 0) {
+    return len + 1;
+  }
+  return len;
 }
 
-void* create_variable_memory() { return new VariableMemory; }
+void int_to_str(int64_t i, char* buf, size_t buf_len) {
+  snprintf(buf, buf_len, "%ld", i);
+}
+
+void* create_variable_memory() {
+  VariableMemory* ptr = (VariableMemory*)malloc(sizeof(VariableMemory));
+  *ptr = VariableMemory();
+  return ptr;
+}
 
 void store_variable_memory(void* var_mem, char* key_str, size_t key_len,
                            char* val_str, size_t val_len) {
@@ -150,7 +196,8 @@ void store_args_variable_memory(void* var_mem, uint64_t argc, char** argv) {
   auto var_mem_usable = (VariableMemory*)var_mem;
 
   for (uint64_t i = 0; i < argc; i++) {
-    var_mem_usable->memory[std::to_string(i)] = argv[i];
+    var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+        .positional_arguments[std::to_string(i + 1)] = argv[i];
   }
 }
 
@@ -161,13 +208,19 @@ const char* get_variable_memory(void* var_mem, char* key_str, size_t key_len) {
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
   std::string key(key_str, key_len);
-  if (var_mem_usable->memory.find(key) == var_mem_usable->memory.end()) {
+  if (var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+          .positional_arguments.contains(key)) {
+    return var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+        .positional_arguments[key]
+        .c_str();
+  }
+  if (!var_mem_usable->memory.contains(key)) {
     return "";
   }
   return var_mem_usable->memory[std::string(key_str, key_len)].c_str();
 }
 
-void free_variable_memory(void* var_mem) { delete (VariableMemory*)var_mem; }
+void free_variable_memory(void* var_mem) { free(var_mem); }
 
 void push_output_stack(void* var_mem, uint16_t output_type) {
   if (var_mem == 0) {
@@ -214,9 +267,6 @@ const char* pop_output_stack(void* var_mem) {
               .location == OutputFactor::OUTPUT_STR &&
       var_mem_usable->output_stack[var_mem_usable->stack_iterator + 1]
           .storage.has_value()) {
-    std::print("poping {}\n",
-               var_mem_usable->output_stack[var_mem_usable->stack_iterator + 1]
-                   .storage.value());
     return var_mem_usable->output_stack[var_mem_usable->stack_iterator + 1]
         .storage.value()
         .c_str();
