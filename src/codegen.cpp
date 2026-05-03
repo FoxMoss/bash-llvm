@@ -28,6 +28,9 @@
 #include "codegen.h"
 #include "lexer.h"
 
+#define UNWRAP_EXPECTED(val) \
+  if (!val.has_value()) return std::unexpected(val.error());
+
 std::expected<llvm::Value*, std::string> NumericExprAST::codegen(
     CodegenState& state) {
   return llvm::ConstantFP::get(*state.context, llvm::APFloat(value));
@@ -36,21 +39,59 @@ std::expected<llvm::Value*, std::string> StringExprAST::codegen(
     CodegenState& state) {
   return state.builder->CreateGlobalString(val);
 }
-std::expected<llvm::Value*, std::string> IdentifierExprAST::codegen(
-    CodegenState& state) {
-  if (!state.named_values[name].has_value()) {
-    return std::unexpected("Unknown variable name");
-  }
-  llvm::Value* v =
-      state.builder->CreateLoad(llvm::PointerType::get(*state.context, 0),
-                                state.named_values[name].value());
 
-  if (!v) return std::unexpected("Unknown variable name");
-  return v;
+std::expected<llvm::Value*, std::string> store_variable_memory(
+    CodegenState& state, std::string name, llvm::Value* value) {
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  llvm::Function* program_called =
+      state.module->getFunction("store_variable_memory");
+  if (!program_called) return std::unexpected("Variable getter does not exist");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 5)
+    return std::unexpected("Helper store_variable_memory is illdefined");
+
+  auto str_length = runtime_strlen(state, value);
+  UNWRAP_EXPECTED(str_length)
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(),
+      state.builder->CreateGlobalString(name),
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
+                             name.size(), value, str_length.value())};
+
+  return state.builder->CreateCall(program_called, arg_values);
 }
 
-#define UNWRAP_EXPECTED(val) \
-  if (!val.has_value()) return std::unexpected(val.error());
+std::expected<llvm::Value*, std::string> get_variable_memory(
+    CodegenState& state, std::string name) {
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  llvm::Function* program_called =
+      state.module->getFunction("get_variable_memory");
+  if (!program_called) return std::unexpected("Variable getter does not exist");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 3)
+    return std::unexpected("Helper get_variable_memory is illdefined");
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(),
+      state.builder->CreateGlobalString(name),
+      llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
+                             name.size())};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+std::expected<llvm::Value*, std::string> IdentifierExprAST::codegen(
+    CodegenState& state) {
+  return get_variable_memory(state, name);
+}
 
 std::expected<llvm::Value*, std::string> runtime_strlen(CodegenState& state,
                                                         llvm::Value* val) {
@@ -86,7 +127,8 @@ std::expected<llvm::Value*, std::string> cast_to_str(CodegenState& state,
                                                      llvm::Value* val) {
   if (val->getType()->isPointerTy()) {
     return val;
-  } else if (val->getType()->isFloatTy()) {
+  } else if (val->getType()->isFloatingPointTy() ||
+             val->getType()->isIntegerTy()) {
     auto int_val = cast_to_int(state, val);
     UNWRAP_EXPECTED(int_val)
 
@@ -332,6 +374,62 @@ std::expected<llvm::Value*, std::string> cast_to_float(CodegenState& state,
   }
 }
 
+std::expected<llvm::Value*, std::string> MathSingleOpExprAST::codegen(
+    CodegenState& state) {
+  auto ident_name = first->get_ident_str();
+
+  if (!ident_name.has_value()) {
+    return std::unexpected(
+        "Single argument operations need a valid identifier");
+  }
+
+  switch (op) {
+    case OP_INC: {
+      auto ident_value = get_variable_memory(state, ident_name.value());
+      UNWRAP_EXPECTED(ident_value)
+      auto ident_float = cast_to_float(state, ident_value.value());
+      UNWRAP_EXPECTED(ident_float)
+
+      auto incremented = state.builder->CreateFAdd(
+          ident_float.value(),
+          llvm::ConstantFP::get(llvm::Type::getFloatTy(*state.context), 1.0),
+          "inctmp");
+
+      auto incremented_str = cast_to_str(state, incremented);
+      UNWRAP_EXPECTED(incremented_str)
+
+      auto stored = store_variable_memory(state, ident_name.value(),
+                                          incremented_str.value());
+      UNWRAP_EXPECTED(stored)
+
+      return ident_value.value();  // ++ returns original
+    } break;
+    case OP_DEC: {
+      auto ident_value = get_variable_memory(state, ident_name.value());
+      UNWRAP_EXPECTED(ident_value)
+      auto ident_float = cast_to_float(state, ident_value.value());
+      UNWRAP_EXPECTED(ident_float)
+
+      auto incremented = state.builder->CreateFSub(
+          ident_float.value(),
+          llvm::ConstantFP::get(llvm::Type::getFloatTy(*state.context), 1.0),
+          "dectmp");
+
+      auto incremented_str = cast_to_str(state, incremented);
+      UNWRAP_EXPECTED(incremented_str)
+
+      auto stored = store_variable_memory(state, ident_name.value(),
+                                          incremented_str.value());
+      UNWRAP_EXPECTED(stored)
+
+      return ident_value.value();  // -- returns original
+    } break;
+    default:
+      break;
+  }
+  return std::unexpected("Single argument operation does not support operator");
+}
+
 std::expected<llvm::Value*, std::string> MathOpExprAST::codegen(
     CodegenState& state) {
   auto left = first->codegen(state);
@@ -365,19 +463,99 @@ std::expected<llvm::Value*, std::string> MathOpExprAST::codegen(
     case OP_DIV:
       return state.builder->CreateFDiv(left_val.value(), right_val.value(),
                                        "divtmp");
+    case OP_GT:
+      return state.builder->CreateFCmpUGT(left_val.value(), right_val.value(),
+                                          "gttmp");
+    case OP_LT:
+      return state.builder->CreateFCmpULT(left_val.value(), right_val.value(),
+                                          "lttmp");
+    case OP_LE:
+      return state.builder->CreateFCmpULE(left_val.value(), right_val.value(),
+                                          "letmp");
+    case OP_GE:
+      return state.builder->CreateFCmpUGE(left_val.value(), right_val.value(),
+                                          "getmp");
+    case OP_NOT_EQ:
+      return state.builder->CreateNot(state.builder->CreateFCmpUEQ(
+          left_val.value(), right_val.value(), "noteqmp"));
+
+    case OP_PLUS_EQ: {
+      auto ident_name = first->get_ident_str();
+
+      if (!ident_name.has_value()) {
+        return std::unexpected(
+            "Plus equals need a valid identifier first argument");
+      }
+
+      auto added_val = state.builder->CreateFAdd(
+          left_val.value(), right_val.value(), "pluseqtmp");
+
+      auto incremented_str = cast_to_str(state, added_val);
+      UNWRAP_EXPECTED(incremented_str)
+
+      auto stored = store_variable_memory(state, ident_name.value(),
+                                          incremented_str.value());
+      UNWRAP_EXPECTED(stored)
+
+      return added_val;
+    }
+    case OP_MINUS_EQ: {
+      auto ident_name = first->get_ident_str();
+
+      if (!ident_name.has_value()) {
+        return std::unexpected(
+            "Minus equals need a valid identifier first argument");
+      }
+
+      auto added_val = state.builder->CreateFSub(
+          left_val.value(), right_val.value(), "minuseqtmp");
+
+      auto incremented_str = cast_to_str(state, added_val);
+      UNWRAP_EXPECTED(incremented_str)
+
+      auto stored = store_variable_memory(state, ident_name.value(),
+                                          incremented_str.value());
+      UNWRAP_EXPECTED(stored)
+
+      return added_val;
+    }
+
+    default:
     case OP_UNK:
       return std::unexpected("Math operator is unknown");
   }
   std::unreachable();
 }
 
+std::expected<llvm::Value*, std::string> runtime_store_args_variable_memory(
+    CodegenState& state, llvm::Value* argc, llvm::Value* argv) {
+  llvm::Function* program_called =
+      state.module->getFunction("store_args_variable_memory");
+  if (!program_called)
+    return std::unexpected("store_args_variable_memory not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 3)
+    return std::unexpected("Program store_args_variable_memory is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(), argc, argv};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+
 std::expected<llvm::Value*, std::string> CallExprAST::codegen(
     CodegenState& state) {
-  llvm::Function* program_called = state.module->getFunction(program);
+  llvm::Function* program_called =
+      state.module->getFunction(std::format("bash_{}", program));
   if (!program_called) return std::unexpected("Unknown function referenced");
 
   // If argument mismatch error.
-  if (program_called->arg_size() != 2)
+  if (program_called->arg_size() != 3)
     return std::unexpected("Program " + program + " is illdefined");
 
   auto args_codegen = args->codegen(state);
@@ -403,13 +581,19 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
 
   state.builder->CreateStore(args_array, stack_args);
 
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
   std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(),
       llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(*state.context),
                              args_array_type->getNumElements()),
       stack_args};
 
   return state.builder->CreateCall(program_called, arg_values);
 }
+
 std::expected<llvm::Value*, std::string> reduce_to_bool(CodegenState& state,
                                                         llvm::Value* val) {
   if (val->getType()->isFloatingPointTy()) {
@@ -719,7 +903,45 @@ std::expected<llvm::Value*, std::string> AssignmentExprAST::codegen(
   return val_str.value();
 }
 
-std::expected<llvm::Value*, std::string> ForAST::codegen(CodegenState& state) {
+std::expected<llvm::Value*, std::string> CStyleForExprAST::codegen(
+    CodegenState& state) {
+  llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
+
+  auto loop = llvm::BasicBlock::Create(*state.context, "forloop", parent_func);
+  auto body_block = llvm::BasicBlock::Create(*state.context, "forbody");
+  auto merge = llvm::BasicBlock::Create(*state.context, "formerge");
+
+  auto assigned = assignment->codegen(state);
+  UNWRAP_EXPECTED(assigned)
+
+  state.builder->CreateBr(loop);
+
+  state.builder->SetInsertPoint(loop);
+
+  auto incremented = increment->codegen(state);
+  UNWRAP_EXPECTED(incremented)
+
+  auto cond_check = check->codegen(state);
+  UNWRAP_EXPECTED(cond_check)
+
+  state.builder->CreateCondBr(cond_check.value(), body_block, merge);
+
+  parent_func->insert(parent_func->end(), body_block);
+  state.builder->SetInsertPoint(body_block);
+
+  auto body_val = body.value()->codegen(state);
+  UNWRAP_EXPECTED(body_val);
+
+  state.builder->CreateBr(loop);
+
+  parent_func->insert(parent_func->end(), merge);
+  state.builder->SetInsertPoint(merge);
+
+  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+}
+
+std::expected<llvm::Value*, std::string> ForInExprAST::codegen(
+    CodegenState& state) {
   auto range_array = range->codegen(state);
   UNWRAP_EXPECTED(range_array)
 
@@ -775,7 +997,10 @@ std::expected<llvm::Value*, std::string> ForAST::codegen(CodegenState& state) {
 
   state.named_values[index] = variable_state;
 
-  auto body_value = body->codegen(state);
+  if (!body.has_value()) {
+    return std::unexpected("For body never defined");
+  }
+  auto body_value = body.value()->codegen(state);
   UNWRAP_EXPECTED(body_value)
 
   auto next_var = state.builder->CreateAdd(variable, step);
@@ -908,4 +1133,175 @@ std::expected<llvm::Value*, std::string> CompoundExprAST::codegen(
   }
 
   return exprs.back()->codegen(state);
+}
+
+std::expected<llvm::Value*, std::string> FunctionDefAST::codegen(
+    CodegenState& state) {
+  llvm::BasicBlock* return_block = state.builder->GetInsertBlock();
+
+  llvm::Function* function =
+      state.module->getFunction(std::format("bash_{}", name));
+
+  if (!function)  // not defined
+    return std::unexpected("Function was not predeclared");
+
+  auto named_values = state.named_values;
+  state.named_values.clear();
+
+  std::optional<llvm::Value*> variable_memory;
+  std::optional<llvm::Value*> argc;
+  std::optional<llvm::Value*> argv;
+  for (auto& arg : function->args()) {
+    switch (arg.getArgNo()) {
+      case 0:
+        variable_memory = &arg;
+        break;
+      case 1:
+        argc = &arg;
+        break;
+      case 2:
+        argv = &arg;
+        break;
+      default:
+        return std::unexpected("Too many arguments to function");
+    }
+  }
+
+  if (!variable_memory.has_value() || !argc.has_value() || !argv.has_value()) {
+    return std::unexpected("Too little arguments to function");
+  }
+
+  state.named_values["variable_memory"] = variable_memory;
+
+  llvm::BasicBlock* entry_block =
+      llvm::BasicBlock::Create(*state.context, "entry", function);
+  state.builder->SetInsertPoint(entry_block);
+
+  auto stored =
+      runtime_store_args_variable_memory(state, argc.value(), argv.value());
+
+  UNWRAP_EXPECTED(stored);
+  auto body_code = body->codegen(state);
+  UNWRAP_EXPECTED(body_code)
+
+  state.builder->CreateRetVoid();
+
+  state.named_values = named_values;
+  state.builder->SetInsertPoint(return_block);
+
+  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+}
+
+std::expected<llvm::Value*, std::string> IfAST::codegen(CodegenState& state) {
+  llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
+
+  if (else_val.has_value()) {
+    llvm::BasicBlock* ifthen_block =
+        llvm::BasicBlock::Create(*state.context, "ifthen", parent_func);
+    llvm::BasicBlock* ifelse_block =
+        llvm::BasicBlock::Create(*state.context, "ifelse");
+    llvm::BasicBlock* merge_block =
+        llvm::BasicBlock::Create(*state.context, "fi");
+
+    auto condition_val = condition->codegen(state);
+    UNWRAP_EXPECTED(condition_val)
+
+    state.builder->CreateCondBr(condition_val.value(), ifthen_block,
+                                ifelse_block);
+
+    state.builder->SetInsertPoint(ifthen_block);
+
+    auto then_code = then_val->codegen(state);
+    UNWRAP_EXPECTED(then_code)
+
+    state.builder->CreateBr(merge_block);
+
+    parent_func->insert(parent_func->end(), ifelse_block);
+    state.builder->SetInsertPoint(ifelse_block);
+
+    auto else_code = else_val.value()->codegen(state);
+    UNWRAP_EXPECTED(else_code)
+
+    state.builder->CreateBr(merge_block);
+
+    parent_func->insert(parent_func->end(), merge_block);
+    state.builder->SetInsertPoint(merge_block);
+  } else {
+    llvm::BasicBlock* ifthen_block =
+        llvm::BasicBlock::Create(*state.context, "ifthen", parent_func);
+    llvm::BasicBlock* merge_block =
+        llvm::BasicBlock::Create(*state.context, "fi");
+
+    auto condition_val = condition->codegen(state);
+    UNWRAP_EXPECTED(condition_val)
+
+    state.builder->CreateCondBr(condition_val.value(), ifthen_block,
+                                merge_block);
+
+    state.builder->SetInsertPoint(ifthen_block);
+
+    auto then_code = then_val->codegen(state);
+    UNWRAP_EXPECTED(then_code)
+
+    state.builder->CreateBr(merge_block);
+
+    parent_func->insert(parent_func->end(), merge_block);
+    state.builder->SetInsertPoint(merge_block);
+  }
+
+  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+}
+
+std::expected<void, std::string> runtime_push_output_stack(
+    CodegenState& state, uint16_t location_type) {
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  llvm::Function* program_called =
+      state.module->getFunction("push_output_stack");
+  if (!program_called)
+    return std::unexpected("push_output_stack does not exist");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 2)
+    return std::unexpected("Helper push_output_stack is illdefined");
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(),
+      llvm::ConstantInt::get(llvm::Type::getInt16Ty(*state.context),
+                             location_type)};
+
+  state.builder->CreateCall(program_called, arg_values);
+  return std::expected<void, std::string>();
+}
+std::expected<llvm::Value*, std::string> runtime_pop_output_stack(
+    CodegenState& state) {
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  llvm::Function* program_called =
+      state.module->getFunction("pop_output_stack");
+  if (!program_called)
+    return std::unexpected("pop_output_stack does not exist");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 1)
+    return std::unexpected("Helper pop_output_stack is illdefined");
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value()};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+
+std::expected<llvm::Value*, std::string> InjectIntoStringAST::codegen(
+    CodegenState& state) {
+  auto pushed_stack = runtime_push_output_stack(state, 1 /* 1 == OUTPUT_STR */);
+  UNWRAP_EXPECTED(pushed_stack)
+  auto body_val = body->codegen(state);
+  UNWRAP_EXPECTED(body_val)
+
+  return runtime_pop_output_stack(state);
 }

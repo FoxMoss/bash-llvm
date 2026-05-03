@@ -33,6 +33,9 @@ class ExprAST {
   virtual std::expected<llvm::Value*, std::string> codegen(CodegenState&) {
     return std::unexpected("Not implemented\n");
   };
+
+  virtual std::optional<std::string> get_ident_str() { return {}; }
+  virtual std::vector<std::string> get_functions_defined() { return {}; }
 };
 
 class StringExprAST : public ExprAST {
@@ -83,9 +86,10 @@ class UnknownExprAST : public ExprAST {
 };
 
 class IdentifierExprAST : public ExprAST {
+ public:
+  // name is public incase we need to do manipulation
   std::string name;
 
- public:
   IdentifierExprAST(const std::string& name) : name(name) {}
 
   void print_name(ssize_t level) override {
@@ -100,6 +104,7 @@ class IdentifierExprAST : public ExprAST {
 
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
+  std::optional<std::string> get_ident_str() override { return name; }
 };
 class NumericExprAST : public ExprAST {
   double value;
@@ -164,6 +169,28 @@ class StatementOpExprAST : public ExprAST {
   StatementOp op;
   std::unique_ptr<ExprAST> first;
   std::unique_ptr<ExprAST> second;
+};
+class MathSingleOpExprAST : public ExprAST {
+  MathOp op;
+  std::unique_ptr<ExprAST> first;
+
+ public:
+  MathSingleOpExprAST(MathOp op, std::unique_ptr<ExprAST> first)
+      : op(op), first(std::move(first)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+    std::print("MathSingleOpExprAST {}\n", math_op_to_string(op));
+
+    first->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
 };
 
 class MathOpExprAST : public ExprAST {
@@ -338,19 +365,41 @@ class CompoundExprAST : public ExprAST {
   }
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
+  std::vector<std::string> get_functions_defined() override {
+    std::vector<std::string> ret;
+    for (auto& expr : exprs) {
+      auto expr_funcs = expr->get_functions_defined();
+      ret.insert(ret.end(), expr_funcs.begin(), expr_funcs.end());
+    }
+    return ret;
+  }
 };
 
-class ForAST : public ExprAST {
-  std::string index;
-  std::unique_ptr<ExprAST> range;
-  std::unique_ptr<ExprAST> body;
+class ForExprAST : public ExprAST {
+ public:
+  ForExprAST() {}
+  virtual ~ForExprAST() {}
+  void virtual add_body(std::unique_ptr<ExprAST>) {}
+};
+
+class CStyleForExprAST : public ForExprAST {
+  std::unique_ptr<ExprAST> assignment;
+  std::unique_ptr<ExprAST> check;
+  std::unique_ptr<ExprAST> increment;
+
+  std::optional<std::unique_ptr<ExprAST>> body;
 
  public:
-  ForAST(std::string index, std::unique_ptr<ExprAST> range,
-         std::unique_ptr<ExprAST> body)
-      : index(std::move(index)),
-        range(std::move(range)),
-        body(std::move(body)) {}
+  CStyleForExprAST(std::unique_ptr<ExprAST> assignment,
+                   std::unique_ptr<ExprAST> check,
+                   std::unique_ptr<ExprAST> increment)
+      : assignment(std::move(assignment)),
+        check(std::move(check)),
+        increment(std::move(increment)) {}
+
+  void add_body(std::unique_ptr<ExprAST> c_body) override {
+    body = std::move(c_body);
+  }
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -360,10 +409,49 @@ class ForAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("ForAST {} in\n", index);
+    std::print("CStyleForInExprAST \n");
+
+    assignment->print_name(level + 1);
+    check->print_name(level + 1);
+    increment->print_name(level + 1);
+
+    if (body.has_value()) {
+      body.value()->print_name(level + 1);
+    }
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
+class ForInExprAST : public ForExprAST {
+  std::string index;
+  std::unique_ptr<ExprAST> range;
+
+  std::optional<std::unique_ptr<ExprAST>> body;
+
+ public:
+  ForInExprAST(std::string index, std::unique_ptr<ExprAST> range)
+      : index(std::move(index)), range(std::move(range)) {}
+
+  void add_body(std::unique_ptr<ExprAST> c_body) override {
+    body = std::move(c_body);
+  }
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("ForInAST {} in\n", index);
 
     range->print_name(level + 1);
-    body->print_name(level + 1);
+
+    if (body.has_value()) {
+      body.value()->print_name(level + 1);
+    }
   }
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
@@ -406,6 +494,37 @@ class ConditionExprAST : public ExprAST {
       CodegenState& state) override;
 };
 
+class IfAST : public ExprAST {
+  std::unique_ptr<ExprAST> condition;
+  std::unique_ptr<ExprAST> then_val;
+  std::optional<std::unique_ptr<ExprAST>> else_val;
+
+ public:
+  IfAST(std::unique_ptr<ExprAST> condition, std::unique_ptr<ExprAST> then_val,
+        std::optional<std::unique_ptr<ExprAST>> else_val)
+      : condition(std::move(condition)),
+        then_val(std::move(then_val)),
+        else_val(std::move(else_val)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("IfAST\n");
+
+    condition->print_name(level + 1);
+    then_val->print_name(level + 1);
+    if (else_val.has_value()) {
+      else_val.value()->print_name(level + 1);
+    }
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
 class WhileAST : public ExprAST {
   std::unique_ptr<ExprAST> condition;
   std::unique_ptr<ExprAST> body;
@@ -456,12 +575,74 @@ class ConcatStringsAST : public ExprAST {
       CodegenState& state) override;
 };
 
+class FunctionDefAST : public ExprAST {
+  std::string name;
+  std::unique_ptr<ExprAST> body;
+
+ public:
+  FunctionDefAST(std::string name, std::unique_ptr<ExprAST> body)
+      : name(name), body(std::move(body)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("FunctionDefAST {}\n", name);
+
+    body->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+  std::vector<std::string> get_functions_defined() override { return {name}; }
+};
+
+class InjectIntoStringAST : public ExprAST {
+  std::unique_ptr<ExprAST> body;
+
+ public:
+  InjectIntoStringAST(std::unique_ptr<ExprAST> body) : body(std::move(body)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("InjectIntoStringAST\n");
+
+    body->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
 std::optional<std::unique_ptr<ExprAST>> parse_compound_expression(
-    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
+    bool top_level = false);
 std::optional<std::unique_ptr<ExprAST>> parse_expression(
-    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
+    bool top_level = false);
 std::optional<std::unique_ptr<ExprAST>> parse_paren_math_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
 std::optional<std::unique_ptr<ExprAST>> parse_operator_math_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
     int lhs_prec, std::unique_ptr<ExprAST> lefthandside);
+
+// thank you StackOverflow https://stackoverflow.com/a/36120483
+template <typename TO, typename FROM>
+std::unique_ptr<TO> static_unique_pointer_cast(std::unique_ptr<FROM>&& old) {
+  return std::unique_ptr<TO>{static_cast<TO*>(old.release())};
+  // conversion: unique_ptr<FROM>->FROM*->TO*->unique_ptr<TO>
+}
+
+std::expected<void, std::string> runtime_push_output_stack(
+    CodegenState& state, uint16_t location_type);
+std::expected<llvm::Value*, std::string> runtime_pop_output_stack(
+    CodegenState& state);
+

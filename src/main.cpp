@@ -67,9 +67,11 @@ int main(int argc, char* argv[]) {
   std::vector<BashLexerSegment> lexer_segments;
   ParenMap paren_map;
 
+  std::string file_contents = source_file->contents();
   do {
+    paren_map.index_counter = lexer_segments.size();
     last_token = BashLexerSegment::munch_token(
-        source_file->contents(), cursor,
+        file_contents, cursor,
         last_token.has_value() ? last_token->back().token : TOK_UNK, paren_map);
 
     // must have value so we don't need to check
@@ -84,9 +86,10 @@ int main(int argc, char* argv[]) {
       std::print("[{}] {}\n", token.str, token.get_token_name());
     }
   }
+  std::print("{}", file_contents);
 
   size_t ast_cursor = 0;
-  auto base = parse_compound_expression(lexer_segments, ast_cursor);
+  auto base = parse_compound_expression(lexer_segments, ast_cursor, true);
 
   if (print_ast && base.has_value()) {
     base.value()->print_name(0);
@@ -97,12 +100,23 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  CodegenState state;
+  auto function_prototypes = base->get()->get_functions_defined();
+  CodegenState state(function_prototypes);
+
+  if (!runtime_push_output_stack(state, 0).has_value()) {
+    printf("Error while pushing stack\n");
+  }
+
   auto value = base.value()->codegen(state);
   if (!value.has_value()) {
     std::print("Error: {}\n", value.error());
     return 1;
   }
+
+  if (!runtime_pop_output_stack(state).has_value()) {
+    printf("Error while popping stack\n");
+  }
+
   state.builder->CreateRetVoid();
 
   std::error_code error;
