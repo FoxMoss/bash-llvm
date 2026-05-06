@@ -868,6 +868,7 @@ std::expected<llvm::Value*, std::string> CStyleForExprAST::codegen(
   UNWRAP_EXPECTED(cond_check)
 
   state.builder->CreateCondBr(cond_check.value(), body_block, merge);
+  loop = state.builder->GetInsertBlock();
 
   parent_func->insert(parent_func->end(), body_block);
   state.builder->SetInsertPoint(body_block);
@@ -879,6 +880,8 @@ std::expected<llvm::Value*, std::string> CStyleForExprAST::codegen(
   UNWRAP_EXPECTED(incremented)
 
   state.builder->CreateBr(loop);
+
+  body_block= state.builder->GetInsertBlock();
 
   parent_func->insert(parent_func->end(), merge);
   state.builder->SetInsertPoint(merge);

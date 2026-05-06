@@ -627,7 +627,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_compound_expression(
     bool top_level = false);
 std::optional<std::unique_ptr<ExprAST>> parse_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
-    bool top_level = false);
+    bool top_level = false, bool parse_ops = true);
 std::optional<std::unique_ptr<ExprAST>> parse_paren_math_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
 std::optional<std::unique_ptr<ExprAST>> parse_operator_math_expression(

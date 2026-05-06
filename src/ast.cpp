@@ -416,13 +416,9 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
         break;
 
       case TOK_NEWLINE:
-      case TOK_SEMI_COLON:
-
-        // eat it
-        get_next_segment(lexer_segments, cursor);
         [[fallthrough]];
-
-        // if we don't parse
+      case TOK_SEMI_COLON:
+        [[fallthrough]];
       default:
 
         if (blob.size() != 0) {
@@ -968,7 +964,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_compound_expression(
 
 std::optional<std::unique_ptr<ExprAST>> parse_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
-    bool top_level) {
+    bool top_level, bool parse_ops) {
   std::optional<BashLexerSegment> current_segment =
       get_current_segment(lexer_segments, cursor);
 
@@ -1009,16 +1005,20 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
       } break;
       case TOK_OPEN_PAREN_PAREN: {
         return_expr = parse_paren_math_expression(lexer_segments, cursor);
-        return_expr->get()->print_name(0);
       } break;
       case TOK_AND_AND: {
+        if (!parse_ops) {
+          return last_expr;
+        }
+
         current_segment = get_next_segment(lexer_segments, cursor);  // eat op
 
         if (!last_expr.has_value()) {
           RETURN_WITH_WARNING();
         }
 
-        auto righthandside = parse_expression(lexer_segments, cursor);
+        auto righthandside =
+            parse_expression(lexer_segments, cursor, false, false);
         if (!righthandside.has_value()) {
           RETURN_WITH_WARNING();
         }
@@ -1029,13 +1029,18 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
         last_expr = {};
       } break;
       case TOK_OR_OR: {
+        if (!parse_ops) {
+          return last_expr;
+        }
+
         current_segment = get_next_segment(lexer_segments, cursor);  // eat op
 
         if (!last_expr.has_value()) {
           RETURN_WITH_WARNING();
         }
 
-        auto righthandside = parse_expression(lexer_segments, cursor);
+        auto righthandside =
+            parse_expression(lexer_segments, cursor, false, false);
         if (!righthandside.has_value()) {
           RETURN_WITH_WARNING();
         }
@@ -1126,15 +1131,6 @@ std::optional<std::unique_ptr<ExprAST>> parse_expression(
         }
         RETURN_WITH_MSG("Can't parse " + current_segment->get_token_name() +
                         " " + current_segment->str);
-    }
-
-    skip_whitespace(lexer_segments, cursor);
-
-    auto next_segment = get_current_segment(lexer_segments, cursor);
-    if (next_segment->token != TOK_OR_OR &&
-        next_segment->token != TOK_AND_AND && next_segment->token != TOK_OR &&
-        next_segment->token != TOK_AND && return_expr.has_value()) {
-      return return_expr;
     }
 
     if (return_expr.has_value()) {

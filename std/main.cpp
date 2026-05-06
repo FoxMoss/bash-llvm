@@ -153,9 +153,6 @@ void bash_printf(void* var_mem, uint64_t argc, char** argv) {
 
 float str_to_float(char* str) {
   auto val = std::strtof(str, NULL);
-  if (errno == ERANGE) {
-    return 0;
-  }
   return val;
 }
 size_t str_to_len(char* str) { return std::strlen(str); }

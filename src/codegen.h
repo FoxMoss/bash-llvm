@@ -1,5 +1,6 @@
 #pragma once
 
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constant.h>
 #include <llvm/IR/DerivedTypes.h>
@@ -11,6 +12,7 @@
 #include <cstdio>
 #include <expected>
 #include <format>
+#include <llvm/Support/ModRef.h>
 #include <map>
 #include <memory>
 
@@ -80,7 +82,7 @@ struct CodegenState {
           llvm::Type::getVoidTy(*context), bash_func_args, false);
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "int_to_str", module.get());
+                             "int_to_str", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
     }
 
     {
@@ -103,7 +105,7 @@ struct CodegenState {
           llvm::PointerType::get(*this->context, 0), bash_func_args, false);
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "get_variable_memory", module.get());
+                             "get_variable_memory", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
     }
 
     {
@@ -120,7 +122,7 @@ struct CodegenState {
           llvm::Type::getVoidTy(*context), bash_func_args, false);
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "store_variable_memory", module.get());
+                             "store_variable_memory", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
     }
     {
       std::vector<llvm::Type*> bash_func_args = {
@@ -131,7 +133,7 @@ struct CodegenState {
           llvm::Type::getVoidTy(*context), bash_func_args, false);
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "free_variable_memory", module.get());
+                             "free_variable_memory", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
     }
 
     {
@@ -144,7 +146,7 @@ struct CodegenState {
           llvm::Type::getVoidTy(*context), bash_func_args, false);
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "store_args_variable_memory", module.get());
+                             "store_args_variable_memory", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
     }
 
     {
@@ -156,7 +158,7 @@ struct CodegenState {
           llvm::PointerType::get(*this->context, 0), bash_func_args, false);
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "pop_output_stack", module.get());
+                             "pop_output_stack", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
     }
 
     {
@@ -169,7 +171,7 @@ struct CodegenState {
           llvm::Type::getVoidTy(*context), bash_func_args, false);
 
       llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "push_output_stack", module.get());
+                             "push_output_stack", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
     }
   }
 
