@@ -3,6 +3,9 @@ add_executable(llsh
  lexer.cpp
  ast.cpp
  codegen.cpp
+ repl.cpp
+ prototypes.cpp
+ compiler.cpp
 )
 
 include(FetchContent)
@@ -26,7 +29,7 @@ FetchContent_MakeAvailable(isocline)
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic -fsanitize=address)
 target_link_options(llsh PRIVATE -Wall -Wextra -Wpedantic -fsanitize=address)
 
-target_link_libraries(llsh LLVM-22)
+target_link_libraries(llsh LLVM-22 isocline CLI11::CLI11)
 
 add_custom_command(TARGET llsh POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy

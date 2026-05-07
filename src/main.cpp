@@ -1,128 +1,36 @@
-#include <llvm/ADT/ArrayRef.h>
-#include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/Constant.h>
-#include <llvm/IR/Constants.h>
-#include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/Module.h>
-#include <llvm/IR/Type.h>
-#include <llvm/IR/Value.h>
-#include <llvm/Support/raw_ostream.h>
+#include "main.h"
 
-#include <cstddef>
 #include <cstdio>
-#include <cstdlib>
-#include <expected>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <memory>
-#include <optional>
-#include <print>
-#include <string>
-#include <string_view>
-#include <utility>
-#include <vector>
 
-#include "ast.h"
-#include "codegen.h"
-#include "lexer.h"
-
-struct File {
-  const std::string& contents() const noexcept;
-
-  static std::optional<File> open(std::string_view path);
-
- private:
-  explicit File(std::string contents);
-
-  std::string d_contents;
-};
-File::File(std::string contents) : d_contents(std::move(contents)) {}
-
-const std::string& File::contents() const noexcept { return d_contents; }
-
-std::optional<File> File::open(std::string_view file_name) {
-  std::filesystem::path path{file_name};
-  std::ifstream file{path};
-  if (!file) return std::nullopt;
-
-  std::stringstream buffer;
-  buffer << file.rdbuf();
-  return File{buffer.str()};
-}
+#include "CLI/CLI.hpp"
 
 int main(int argc, char* argv[]) {
-  if (argc != 2) {
-    std::print("USAGE: {} [filename]\n", argv[0]);
-    return 1;
-  }
-  bool print_lexed = true;
-  bool print_ast = true;
+  CLI::App app{"LLVM Bash compiler"};
 
-  auto source_file = File::open(argv[1]);
-  size_t cursor = 0;
+  CLI::App* compile = app.add_subcommand("compile", "AOT compile bash");
 
-  std::optional<std::vector<BashLexerSegment>> last_token;
-  std::vector<BashLexerSegment> lexer_segments;
-  ParenMap paren_map;
+  compile->allow_non_standard_option_names();
 
-  std::string file_contents = source_file->contents();
-  do {
-    paren_map.index_counter = lexer_segments.size();
-    last_token = BashLexerSegment::munch_token(
-        file_contents, cursor,
-        last_token.has_value() ? last_token->back().token : TOK_UNK, paren_map);
+  std::string input_file;
+  compile->add_option("file", input_file, "Source file for codegen")
+      ->required();
 
-    // must have value so we don't need to check
-    lexer_segments.insert(lexer_segments.end(), last_token.value().begin(),
-                          last_token.value().end());
-  } while (last_token->back().token != TOK_EOF);
+  std::string object_file = "out.o";
+  compile->add_option("-o", object_file, "Output file codegen")
+      ->default_str("out.o");
 
-  lexer_segments = paren_map_fusing(lexer_segments, paren_map);
+  OptimizationFlag opt_flag = OPT_O0;
+  compile->add_flag("-O0{0},-O1{1},-O2{2},-O3{3},-Oz{4},-Os{5},", opt_flag,
+                    "Optimization level");
 
-  if (print_lexed) {
-    for (auto token : lexer_segments) {
-      std::print("[{}] {}\n", token.str, token.get_token_name());
+  CLI11_PARSE(app, argc, argv);
+
+  if (*compile) {
+    if (!compile_bash(input_file, object_file, opt_flag)) {
+      fprintf(stderr, "Compile failed\n");
+      return 1;
     }
   }
-  std::print("{}", file_contents);
-
-  size_t ast_cursor = 0;
-  auto base = parse_compound_expression(lexer_segments, ast_cursor, true);
-
-  if (print_ast && base.has_value()) {
-    base.value()->print_name(0);
-  }
-
-  if (!base.has_value()) {
-    std::print("Error while parsing\n");
-    return 1;
-  }
-
-  auto function_prototypes = base->get()->get_functions_defined();
-  CodegenState state(function_prototypes);
-
-  if (!runtime_push_output_stack(state, 0).has_value()) {
-    printf("Error while pushing stack\n");
-  }
-
-  auto value = base.value()->codegen(state);
-  if (!value.has_value()) {
-    std::print("Error: {}\n", value.error());
-    return 1;
-  }
-
-  if (!runtime_pop_output_stack(state).has_value()) {
-    printf("Error while popping stack\n");
-  }
-  state.free_variable_memory(state.named_values["variable_memory"].value());
-
-  state.builder->CreateRetVoid();
-
-  std::error_code error;
-  llvm::raw_fd_ostream out_file("out.ll", error);
-  state.module->print(out_file, NULL);
 
   return 0;
 }

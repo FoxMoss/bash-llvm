@@ -881,7 +881,7 @@ std::expected<llvm::Value*, std::string> CStyleForExprAST::codegen(
 
   state.builder->CreateBr(loop);
 
-  body_block= state.builder->GetInsertBlock();
+  body_block = state.builder->GetInsertBlock();
 
   parent_func->insert(parent_func->end(), merge);
   state.builder->SetInsertPoint(merge);
@@ -1254,3 +1254,4 @@ std::expected<llvm::Value*, std::string> InjectIntoStringAST::codegen(
 
   return runtime_pop_output_stack(state);
 }
+

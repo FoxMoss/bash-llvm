@@ -8,18 +8,35 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
+#include <llvm/LinkAllPasses.h>
+#include <llvm/Passes/CodeGenPassBuilder.h>
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/StandardInstrumentations.h>
+#include <llvm/Support/ModRef.h>
+#include <llvm/Transforms/Scalar/Reassociate.h>
+#include <llvm/Transforms/Scalar/SimplifyCFG.h>
 
 #include <cstdio>
 #include <expected>
 #include <format>
-#include <llvm/Support/ModRef.h>
 #include <map>
 #include <memory>
+
+#include "main.h"
 
 struct CodegenState {
   std::unique_ptr<llvm::LLVMContext> context;
   std::unique_ptr<llvm::IRBuilder<>> builder;
   std::unique_ptr<llvm::Module> module;
+
+  std::unique_ptr<llvm::LoopAnalysisManager> lam;
+  std::unique_ptr<llvm::FunctionAnalysisManager> fam;
+  std::unique_ptr<llvm::CGSCCAnalysisManager> cgam;
+  std::unique_ptr<llvm::ModuleAnalysisManager> mam;
+  std::unique_ptr<llvm::PassInstrumentationCallbacks> pic;
+  std::unique_ptr<llvm::StandardInstrumentations> si;
+  llvm::ModulePassManager mpm;
+
   std::map<std::string, std::optional<llvm::Value*>> named_values;
   llvm::Function* entry;
 
@@ -36,144 +53,7 @@ struct CodegenState {
                            std::format("bash_{}", name), module.get());
   }
 
-  void generate_standard_library() {
-    generate_prototype("echo");
-    generate_prototype("printf");
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::PointerType::get(*this->context, 0)};
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::Type::getFloatTy(*context), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "str_to_float", module.get());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::PointerType::get(*this->context, 0)};
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::Type::getInt64Ty(*context), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "str_to_len", module.get());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::Type::getInt64Ty(*context)};
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::Type::getInt64Ty(*context), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "int_len", module.get());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::Type::getInt64Ty(*context), llvm::PointerType::get(*context, 0),
-          llvm::Type::getInt64Ty(*context)};
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::Type::getVoidTy(*context), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "int_to_str", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {};
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::PointerType::get(*this->context, 0), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "create_variable_memory", module.get());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::PointerType::get(*this->context, 0),
-          llvm::PointerType::get(*this->context, 0),
-          llvm::Type::getInt64Ty(*this->context)};
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::PointerType::get(*this->context, 0), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "get_variable_memory", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::PointerType::get(*this->context, 0),
-          llvm::PointerType::get(*this->context, 0),
-          llvm::Type::getInt64Ty(*this->context),
-          llvm::PointerType::get(*this->context, 0),
-          llvm::Type::getInt64Ty(*this->context)
-
-      };
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::Type::getVoidTy(*context), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "store_variable_memory", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
-    }
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::PointerType::get(*this->context, 0),
-      };
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::Type::getVoidTy(*context), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "free_variable_memory", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::PointerType::get(*this->context, 0),
-          llvm::Type::getInt64Ty(*context),
-          llvm::PointerType::get(*this->context, 0)};
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::Type::getVoidTy(*context), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "store_args_variable_memory", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::PointerType::get(*this->context, 0),
-      };
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::PointerType::get(*this->context, 0), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "pop_output_stack", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
-    }
-
-    {
-      std::vector<llvm::Type*> bash_func_args = {
-          llvm::PointerType::get(*this->context, 0),
-          llvm::Type::getInt16Ty(*this->context),
-      };
-
-      llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
-          llvm::Type::getVoidTy(*context), bash_func_args, false);
-
-      llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
-                             "push_output_stack", module.get())->setMemoryEffects(llvm::MemoryEffects::unknown());
-    }
-  }
+  void generate_standard_library();
 
   void generate_variable_memory() {
     llvm::Function* program_called =
@@ -217,19 +97,17 @@ struct CodegenState {
     // create a new builder for the module.
     builder = std::make_unique<llvm::IRBuilder<>>(*context);
 
+    lam = std::make_unique<llvm::LoopAnalysisManager>();
+    fam = std::make_unique<llvm::FunctionAnalysisManager>();
+    cgam = std::make_unique<llvm::CGSCCAnalysisManager>();
+    mam = std::make_unique<llvm::ModuleAnalysisManager>();
+    pic = std::make_unique<llvm::PassInstrumentationCallbacks>();
+    si =
+        std::make_unique<llvm::StandardInstrumentations>(*context,
+                                                         /*DebugLogging*/ true);
+    si->registerCallbacks(*pic, mam.get());
+
     generate_standard_library();
-
-    llvm::FunctionType* entry_type =
-        llvm::FunctionType::get(llvm::Type::getVoidTy(*context), false);
-
-    entry = llvm::Function::Create(entry_type, llvm::Function::ExternalLinkage,
-                                   "main", module.get());
-
-    llvm::BasicBlock* entry_block =
-        llvm::BasicBlock::Create(*context, "entry", entry);
-    builder->SetInsertPoint(entry_block);
-
-    generate_variable_memory();
 
     for (auto prototype : function_protypes) {
       generate_prototype(prototype);
