@@ -657,7 +657,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_for(
 
   std::optional<std::unique_ptr<ForExprAST>> for_in_expr;
 
-  if (current_segment.has_value() ||
+  if (current_segment.has_value() &&
       current_segment->token == TOK_OPEN_PAREN_PAREN) {
     for_in_expr = parse_c_like_for_expression(lexer_segments, cursor);
   } else if (current_segment.has_value() &&
@@ -681,6 +681,15 @@ std::optional<std::unique_ptr<ExprAST>> parse_for(
 
     for_in_expr =
         std::make_unique<ForInExprAST>(var_tok->str, std::move(range.value()));
+
+    skip_whitespace(lexer_segments, cursor);
+
+    current_segment = get_current_segment(lexer_segments, cursor);
+    if (!current_segment.has_value() ||
+        current_segment->token != TOK_SEMI_COLON) {
+      RETURN_WITH_WARNING();
+    }
+    current_segment = get_next_segment(lexer_segments, cursor);  // eat ;
 
   } else if (!current_segment.has_value() ||
              current_segment->token != TOK_VALUE) {

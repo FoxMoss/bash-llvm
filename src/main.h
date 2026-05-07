@@ -12,6 +12,7 @@ enum OptimizationFlag {
 
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
-                                OptimizationFlag opt_flag);
+                                OptimizationFlag opt_flag, bool debug_lexer,
+                                bool debug_ast);
 void bash_repl();
 

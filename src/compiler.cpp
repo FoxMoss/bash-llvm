@@ -45,9 +45,10 @@ std::optional<File> File::open(std::string_view file_name) {
 
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
-                                OptimizationFlag opt_flag) {
-  bool print_lexed = false;
-  bool print_ast = false;
+                                OptimizationFlag opt_flag, bool debug_lexer,
+                                bool debug_ast) {
+  bool print_lexed = debug_lexer;
+  bool print_ast = debug_ast;
 
   auto source_file = File::open(filename_in);
   size_t cursor = 0;

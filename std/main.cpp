@@ -6,11 +6,8 @@
 #include <cstring>
 #include <map>
 #include <optional>
-#include <print>
 #include <string>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
 struct OutputFactor {
   enum OutputLocation {

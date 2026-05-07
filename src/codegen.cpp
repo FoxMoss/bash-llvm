@@ -944,7 +944,8 @@ std::expected<llvm::Value*, std::string> ForInExprAST::codegen(
   auto variable_state =
       state.builder->CreateExtractElement(range_constant, variable);
 
-  state.named_values[index] = variable_state;
+  auto stored = store_variable_memory(state, index, variable_state);
+  UNWRAP_EXPECTED(stored)
 
   if (!body.has_value()) {
     return std::unexpected("For body never defined");

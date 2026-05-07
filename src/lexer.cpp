@@ -139,9 +139,28 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
       next_char = peek_char(source, cursor);
     }
     return {BashLexerSegment(TOK_COMMENT, token)};
-  } else if (current_char == '\'' || current_char == '"') {
+  } else if (current_char == '\'' || current_char == '"' ||
+             (paren_map.level_map.contains(paren_map.level_counter) &&
+              std::get<2>(
+                  paren_map.level_map[paren_map.level_counter].value()) != 0 &&
+              current_char == ')')) {
     auto start_char = current_char;
     std::vector<BashLexerSegment> ret;
+    if (current_char == ')') {
+      paren_map.relevant_indices.push_back(
+          {my_index, paren_map.level_counter, false});
+      if (paren_map.level_map.contains(paren_map.level_counter)) {
+        paren_map.close_map[std::get<0>(
+            paren_map.level_map[paren_map.level_counter].value())] = my_index;
+      }
+
+      paren_map.level_map[paren_map.level_counter] = {};
+      paren_map.level_counter--;
+
+      ret.push_back(BashLexerSegment(TOK_CLOSE_PAREN, ")"));
+      start_char =
+          std::get<2>(paren_map.level_map[paren_map.level_counter].value());
+    }
     std::string inner_text = "";
     bool escaping = false;
     do {
@@ -263,13 +282,6 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     if (paren_map.level_map.contains(paren_map.level_counter)) {
       paren_map.close_map[std::get<0>(
           paren_map.level_map[paren_map.level_counter].value())] = my_index;
-    }
-
-    if (std::get<2>(paren_map.level_map[paren_map.level_counter].value()) !=
-        0) {
-      source.insert(
-          source.begin() + cursor, 1,
-          std::get<2>(paren_map.level_map[paren_map.level_counter].value()));
     }
 
     paren_map.level_map[paren_map.level_counter] = {};

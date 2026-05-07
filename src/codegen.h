@@ -22,8 +22,6 @@
 #include <map>
 #include <memory>
 
-#include "main.h"
-
 struct CodegenState {
   std::unique_ptr<llvm::LLVMContext> context;
   std::unique_ptr<llvm::IRBuilder<>> builder;
