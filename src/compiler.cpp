@@ -19,18 +19,6 @@
 #include "lexer.h"
 #include "main.h"
 
-struct File {
-  const std::string& contents() const noexcept;
-
-  static std::optional<File> open(std::string_view path);
-
- private:
-  explicit File(std::string contents);
-
-  std::string d_contents;
-};
-File::File(std::string contents) : d_contents(std::move(contents)) {}
-
 const std::string& File::contents() const noexcept { return d_contents; }
 
 std::optional<File> File::open(std::string_view file_name) {

@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include <string>
 
 enum OptimizationFlag {
@@ -15,4 +16,17 @@ enum OptimizationFlag {
                                 OptimizationFlag opt_flag, bool debug_lexer,
                                 bool debug_ast);
 void bash_repl(bool debug);
+
+void bash_interpret(std::string file_name, bool debug);
+
+struct File {
+  const std::string& contents() const noexcept;
+
+  static std::optional<File> open(std::string_view path);
+
+ private:
+  explicit File(std::string contents);
+
+  std::string d_contents;
+};
 

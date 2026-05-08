@@ -61,7 +61,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
 
   if (is_whitespace(current_char.value())) {
     std::optional<char> next_char = peek_char(source, cursor);
-    while (is_whitespace(next_char.value())) {
+    while (next_char.has_value() && is_whitespace(next_char.value())) {
       current_char = read_char(source, cursor, token);
       next_char = peek_char(source, cursor);
     }

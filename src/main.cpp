@@ -4,11 +4,16 @@
 
 #include "CLI/CLI.hpp"
 
+File::File(std::string contents) : d_contents(std::move(contents)) {}
+
 int main(int argc, char* argv[]) {
   CLI::App app{"LLVM Bash compiler"};
 
   bool debug_general = false;
   app.add_flag("--debug", debug_general, "Print debug info to console");
+
+  std::string interpret_file;
+  app.add_option("file", interpret_file, "Source file for interpreting");
 
   CLI::App* compile = app.add_subcommand("compile", "AOT compile bash");
 
@@ -37,7 +42,12 @@ int main(int argc, char* argv[]) {
       return 1;
     }
   } else {
-    bash_repl(debug_general);
+    if (interpret_file.size() == 0) {
+      bash_repl(debug_general);
+      return 0;
+    }
+    bash_interpret(interpret_file, debug_general);
+    return 0;
   }
 
   return 0;
