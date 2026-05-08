@@ -13,6 +13,7 @@
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/StandardInstrumentations.h>
 #include <llvm/Support/ModRef.h>
+#include <llvm/Support/TargetSelect.h>
 #include <llvm/Transforms/Scalar/Reassociate.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
 
@@ -37,6 +38,8 @@ struct CodegenState {
 
   std::map<std::string, std::optional<llvm::Value*>> named_values;
   llvm::Function* entry;
+
+  bool is_jit = false;
 
   void generate_prototype(std::string name) {
     std::vector<llvm::Type*> func_args = {
@@ -88,12 +91,18 @@ struct CodegenState {
     builder->CreateCall(program_called, {var_mem});
   }
 
-  CodegenState(std::vector<std::string> function_protypes) {
+  void init_llvm() {
     context = std::make_unique<llvm::LLVMContext>();
     module = std::make_unique<llvm::Module>("bash", *context);
 
     // create a new builder for the module.
     builder = std::make_unique<llvm::IRBuilder<>>(*context);
+
+    InitializeAllTargetInfos();
+    InitializeAllTargets();
+    InitializeAllTargetMCs();
+    InitializeAllAsmParsers();
+    InitializeAllAsmPrinters();
 
     lam = std::make_unique<llvm::LoopAnalysisManager>();
     fam = std::make_unique<llvm::FunctionAnalysisManager>();
@@ -106,9 +115,25 @@ struct CodegenState {
     si->registerCallbacks(*pic, mam.get());
 
     generate_standard_library();
+  }
+  CodegenState(std::vector<std::string> function_protypes, bool is_jit)
+      : is_jit(is_jit) {
+    init_llvm();
 
     for (auto prototype : function_protypes) {
       generate_prototype(prototype);
+    }
+
+    if (is_jit) {
+      {
+        std::vector<llvm::Type*> bash_func_args = {};
+
+        llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+            llvm::PointerType::get(*this->context, 0), bash_func_args, false);
+
+        llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                               "jit_create_variable_memory", module.get());
+      }
     }
   }
 };

@@ -166,9 +166,12 @@ void int_to_str(int64_t i, char* buf, size_t buf_len) {
 }
 
 void* create_variable_memory() {
-  VariableMemory* ptr = (VariableMemory*)malloc(sizeof(VariableMemory));
-  *ptr = VariableMemory();
-  return ptr;
+  static void* var_mem_cache = NULL;
+  if (var_mem_cache == NULL) {
+    var_mem_cache = new VariableMemory;
+  }
+
+  return var_mem_cache;
 }
 
 void store_variable_memory(void* var_mem, char* key_str, size_t key_len,
@@ -214,7 +217,7 @@ const char* get_variable_memory(void* var_mem, char* key_str, size_t key_len) {
   return var_mem_usable->memory[std::string(key_str, key_len)].c_str();
 }
 
-void free_variable_memory(void* var_mem) { free(var_mem); }
+void free_variable_memory(void* var_mem) { delete (VariableMemory*)var_mem; }
 
 void push_output_stack(void* var_mem, uint16_t output_type) {
   if (var_mem == 0) {

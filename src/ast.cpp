@@ -397,6 +397,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
         // skip it
       case TOK_WHITESPACE:
         if (blob.size() != 0) {
+          blob.push_back(' ');
           auto value = std::make_unique<StringExprAST>(blob);
 
           if (last_expr.has_value()) {
@@ -552,7 +553,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_paren_math_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
   get_next_segment(lexer_segments, cursor);  // eat ((
 
-  auto lefthandside = parse_identifier(lexer_segments, cursor);
+  auto lefthandside = parse_identifier_or_numeric(lexer_segments, cursor);
   if (!lefthandside.has_value()) {
     RETURN_WITH_WARNING()
   }

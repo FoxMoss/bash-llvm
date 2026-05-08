@@ -14,5 +14,5 @@ enum OptimizationFlag {
                                 std::string filename_out,
                                 OptimizationFlag opt_flag, bool debug_lexer,
                                 bool debug_ast);
-void bash_repl();
+void bash_repl(bool debug);
 

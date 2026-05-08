@@ -154,12 +154,12 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
             paren_map.level_map[paren_map.level_counter].value())] = my_index;
       }
 
-      paren_map.level_map[paren_map.level_counter] = {};
-      paren_map.level_counter--;
-
       ret.push_back(BashLexerSegment(TOK_CLOSE_PAREN, ")"));
       start_char =
           std::get<2>(paren_map.level_map[paren_map.level_counter].value());
+
+      paren_map.level_map[paren_map.level_counter] = {};
+      paren_map.level_counter--;
     }
     std::string inner_text = "";
     bool escaping = false;

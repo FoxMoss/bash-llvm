@@ -6,6 +6,7 @@ add_executable(llsh
  repl.cpp
  prototypes.cpp
  compiler.cpp
+ ../std/main.cpp
 )
 
 include(FetchContent)

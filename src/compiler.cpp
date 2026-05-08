@@ -90,14 +90,9 @@ std::optional<File> File::open(std::string_view file_name) {
   }
 
   auto function_prototypes = base->get()->get_functions_defined();
-  CodegenState state(function_prototypes);
+  CodegenState state(function_prototypes, false);
 
   auto target_triple = llvm::Triple(sys::getDefaultTargetTriple());
-  InitializeAllTargetInfos();
-  InitializeAllTargets();
-  InitializeAllTargetMCs();
-  InitializeAllAsmParsers();
-  InitializeAllAsmPrinters();
 
   std::string error;
   auto target = TargetRegistry::lookupTarget(target_triple, error);

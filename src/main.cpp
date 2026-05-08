@@ -7,6 +7,9 @@
 int main(int argc, char* argv[]) {
   CLI::App app{"LLVM Bash compiler"};
 
+  bool debug_general = false;
+  app.add_flag("--debug", debug_general, "Print debug info to console");
+
   CLI::App* compile = app.add_subcommand("compile", "AOT compile bash");
 
   compile->allow_non_standard_option_names();
@@ -33,6 +36,8 @@ int main(int argc, char* argv[]) {
       fprintf(stderr, "Compile failed\n");
       return 1;
     }
+  } else {
+    bash_repl(debug_general);
   }
 
   return 0;
