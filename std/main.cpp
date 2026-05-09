@@ -62,16 +62,19 @@ void bash_echo(void* var_mem, uint64_t argc, char** argv) {
             "";
       }
 
-      for (uint64_t i = 0; i < argc; i++) {
-        var_mem_usable->output_stack[var_mem_usable->stack_iterator]
-            .storage.value() += argv[i];
-        if (i != argc - 1) {
+      if (var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+              .storage.has_value()) {
+        for (uint64_t i = 0; i < argc; i++) {
           var_mem_usable->output_stack[var_mem_usable->stack_iterator]
-              .storage.value() += " ";
+              .storage.value() += argv[i];
+          if (i != argc - 1) {
+            var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+                .storage.value() += " ";
+          }
         }
+        var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+            .storage.value() += "\n";
       }
-      var_mem_usable->output_stack[var_mem_usable->stack_iterator]
-          .storage.value() += "\n";
       break;
     case OutputFactor::OUTPUT_UNK:
       break;

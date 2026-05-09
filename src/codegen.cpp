@@ -809,7 +809,7 @@ std::expected<llvm::Value*, std::string> RangeExprAST::codegen(
   if (first_value.size() == 1 && is_alpha(first_value[0])) {
     first_value_parsed = first_value[0];
   } else {
-    first_value_parsed = std::strtoll(first_value.c_str(), NULL, 10);
+    first_value_parsed = std::strtoll(first_value.c_str(), nullptr, 10);
   }
 
   int64_t second_value_parsed = 0;
@@ -817,7 +817,7 @@ std::expected<llvm::Value*, std::string> RangeExprAST::codegen(
   if (second_value.size() == 1 && is_alpha(second_value[0])) {
     second_value_parsed = second_value[0];
   } else {
-    second_value_parsed = std::strtoll(second_value.c_str(), NULL, 10);
+    second_value_parsed = std::strtoll(second_value.c_str(), nullptr, 10);
   }
 
   auto min = std::min(first_value_parsed, second_value_parsed);
@@ -1223,7 +1223,7 @@ std::expected<void, std::string> runtime_push_output_stack(
                              location_type)};
 
   state.builder->CreateCall(program_called, arg_values);
-  return std::expected<void, std::string>();
+  return {};
 }
 std::expected<llvm::Value*, std::string> runtime_pop_output_stack(
     CodegenState& state) {

@@ -12,9 +12,10 @@
 
 void bash_interpret(std::string file_name, bool debug) {
   auto source_file = File::open(file_name);
+  if(source_file.has_value()){
+    std::fprintf(stderr, "Error %s does not exist.", file_name.c_str());
+  }
   std::string file_contents = source_file->contents();
-
-
 
   size_t cursor = 0;
 

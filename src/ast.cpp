@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <expected>
 #include <memory>
 #include <optional>
 #include <print>
@@ -188,7 +187,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_numeric(
   }
 
   ret = std::make_unique<NumericExprAST>(
-      std::strtod(current_segment->str.data(), NULL));
+      std::strtod(current_segment->str.data(), nullptr));
   // eat ident
   current_segment = get_next_segment(lexer_segments, cursor);
 
@@ -235,7 +234,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_curly_expression(
     RETURN_WITH_WARNING()
   }
 
-  bool has_comma = std::find_if(sub_segments.begin(), sub_segments.end(),
+  bool has_comma = std::ranges::find_if(sub_segments,
                                 [](const BashLexerSegment& a) {
                                   return a.token == TOK_COMMA;
                                 }) != sub_segments.end();
