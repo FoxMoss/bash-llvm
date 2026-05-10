@@ -34,7 +34,7 @@ std::optional<File> File::open(std::string_view file_name) {
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
                                 OptimizationFlag opt_flag, bool debug_lexer,
-                                bool debug_ast) {
+                                bool debug_ast, bool sandbox) {
   bool print_lexed = debug_lexer;
   bool print_ast = debug_ast;
 
@@ -61,7 +61,7 @@ std::optional<File> File::open(std::string_view file_name) {
 
   if (print_lexed) {
     for (auto token : lexer_segments) {
-      std::print("[{}] {}\n", token.str, token.get_token_name());
+      std::print(stderr, "[{}] {}\n", token.str, token.get_token_name());
     }
   }
 
@@ -73,19 +73,20 @@ std::optional<File> File::open(std::string_view file_name) {
   }
 
   if (!base.has_value()) {
-    std::print("Error while parsing\n");
+    std::print(stderr, "Error while parsing\n");
     return false;
   }
 
   auto function_prototypes = base->get()->get_functions_defined();
   CodegenState state(function_prototypes, false);
+  state.is_sandboxed = sandbox;
 
   auto target_triple = llvm::Triple(sys::getDefaultTargetTriple());
 
   std::string error;
   auto target = TargetRegistry::lookupTarget(target_triple, error);
   if (!target) {
-    std::println("Error could not get target triple");
+    std::println(stderr, "Error could not get target triple");
     return false;
   }
 
@@ -111,17 +112,17 @@ std::optional<File> File::open(std::string_view file_name) {
 
     state.generate_variable_memory();
     if (!runtime_push_output_stack(state, 0).has_value()) {
-      printf("Error while pushing stack\n");
+      std::println(stderr, "Error while pushing stack");
     }
 
     auto value = base.value()->codegen(state);
     if (!value.has_value()) {
-      std::print("Error: {}\n", value.error());
+      std::print(stderr, "Error: {}\n", value.error());
       return false;
     }
 
     if (!runtime_pop_output_stack(state).has_value()) {
-      printf("Error while popping stack\n");
+      std::println(stderr, "Error while popping stack");
     }
     state.free_variable_memory(state.named_values["variable_memory"].value());
 
@@ -163,15 +164,15 @@ std::optional<File> File::open(std::string_view file_name) {
   llvm::raw_fd_ostream out_file(filename_out, error_code);
 
   if (error_code) {
-    std::fprintf(stderr, "Error opening output file\n");
+    std::println(stderr, "Error opening output file");
     return false;
   }
 
   llvm::legacy::PassManager object_passes;
-  if (target_machine->addPassesToEmitFile(object_passes, out_file, NULL,
+  if (target_machine->addPassesToEmitFile(object_passes, out_file, nullptr,
                                           llvm::CodeGenFileType::ObjectFile)) {
-    std::fprintf(stderr, "Target machine can't output object file\n");
-    return 1;
+    std::println(stderr, "Target machine can't output object file");
+    return true;
   }
 
   object_passes.run(*state.module);

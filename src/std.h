@@ -32,6 +32,8 @@ void bash_echo(void* var_mem, uint64_t argc, char** argv);
 
 void bash_printf(void* var_mem, uint64_t argc, char** argv);
 
+void external_program(void* var_mem, char* path, uint64_t argc, char** argv);
+
 float str_to_float(char* str);
 size_t str_to_len(char* str);
 size_t int_len(int64_t i);

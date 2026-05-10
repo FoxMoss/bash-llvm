@@ -14,23 +14,26 @@ static void completer(ic_completion_env_t* cenv, const char* prefix);
 
 static void highlighter(ic_highlight_env_t* henv, const char* input, void* arg);
 
-void bash_repl(bool debug) {
+void bash_repl(bool debug, bool sandbox) {
   ic_style_def("kbd", "gray underline");
   ic_style_def("ic-prompt", "ansi-maroon");
   ic_set_prompt_marker("$ ", "> ");
 
-  ic_set_default_completer(&completer, NULL);
+  ic_set_history(nullptr, -1 /* default entries (= 200) */);
+  ic_set_default_completer(&completer, nullptr);
 
-  ic_set_default_highlighter(highlighter, NULL);
+  ic_set_default_highlighter(highlighter, nullptr);
 
   ic_enable_auto_tab(true);
 
   auto state = CodegenState({}, true);
-  auto jit = BashJIT::create();
+  state.is_sandboxed = sandbox;
+
+  auto jit = BashJIT::create(sandbox);
   state.module.get()->setDataLayout(jit->get()->data_layout);
 
   if (!jit.has_value()) {
-    std::fprintf(stderr, "Couldn't make JIT: %s\n", jit.error().c_str());
+    std::println(stderr, "Couldn't make JIT: {}", jit.error());
   }
 
   auto resource_tracker = jit->get()->main_jit_dylib.createResourceTracker();
@@ -39,7 +42,7 @@ void bash_repl(bool debug) {
   auto added_module =
       jit->get()->add_module(std::move(thread_safe_module), resource_tracker);
   if (!added_module.has_value()) {
-    std::fprintf(stderr, "Failed to add module");
+    std::print(stderr, "Failed to add module");
     return;
   }
   state.init_llvm();
@@ -48,7 +51,7 @@ void bash_repl(bool debug) {
   std::string path = std::filesystem::current_path();
 
   char* input;
-  while ((input = ic_readline(path.c_str())) != NULL) {
+  while ((input = ic_readline(path.c_str())) != nullptr) {
     size_t cursor = 0;
 
     std::optional<std::vector<BashLexerSegment>> last_token;
@@ -96,17 +99,25 @@ void bash_repl(bool debug) {
 
     state.generate_variable_memory();
     if (!runtime_push_output_stack(state, 0).has_value()) {
-      printf("Error while pushing stack\n");
+      std::println(stderr, "Error while pushing stack");
     }
 
     auto value = base.value()->codegen(state);
     if (!value.has_value()) {
-      std::print("Error: {}\n", value.error());
-      return;
+      std::print(stderr, "Error: {}\n", value.error());
+
+      free(input);
+
+      // kill it otherwise the jit gets very confused
+      state.module.reset();
+      state.init_llvm();
+      state.module->setDataLayout(jit->get()->data_layout);
+      continue;
     }
 
     if (!runtime_pop_output_stack(state).has_value()) {
-      printf("Error while popping stack\n");
+      std::println(stderr, "Error while popping stack");
+      return;
     }
 
     state.builder->CreateRetVoid();
@@ -118,13 +129,13 @@ void bash_repl(bool debug) {
     auto added_module =
         jit->get()->add_module(std::move(thread_safe_module), resource_tracker);
     if (!added_module.has_value()) {
-      std::fprintf(stderr, "Failed to make module");
+      std::println(stderr, "Failed to make module");
       return;
     }
 
     auto expr_symbol = jit->get()->lookup("main");
     if (!expr_symbol.has_value()) {
-      std::fprintf(stderr, "Failed to find expr");
+      std::println(stderr, "Failed to find expr");
       return;
     }
 
@@ -134,7 +145,7 @@ void bash_repl(bool debug) {
     auto err = resource_tracker->remove();
 
     if (err) {
-      std::fprintf(stderr, "Couldn't free resource_tracker.\n");
+      std::println(stderr, "Couldn't free resource_tracker.");
     }
 
     state.init_llvm();
@@ -147,7 +158,7 @@ void bash_repl(bool debug) {
 }
 
 static void completer(ic_completion_env_t* cenv, const char* input) {
-  ic_complete_filename(cenv, input, 0, ".", NULL);
+  ic_complete_filename(cenv, input, 0, ".", nullptr);
 }
 
 static void highlighter(ic_highlight_env_t* henv, const char* input,

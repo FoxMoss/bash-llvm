@@ -503,45 +503,84 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
     CodegenState& state) {
   llvm::Function* program_called =
       state.module->getFunction(std::format("bash_{}", program));
-  if (!program_called) return std::unexpected("Unknown function referenced");
+  if (state.is_sandboxed && !program_called)
+    return std::unexpected("Unknown function referenced");
+
+  bool external_program = false;
+  if (!program_called) {
+    program_called =
+        state.module->getFunction(std::format("external_program", program));
+    external_program = true;
+  }
 
   // If argument mismatch error.
-  if (program_called->arg_size() != 3)
-    return std::unexpected("Program " + program + " is illdefined");
-
-  auto args_codegen = args->codegen(state);
-  UNWRAP_EXPECTED(args_codegen)
-
-  if (!args_codegen.value()->getType()->isVectorTy()) {
-    return std::unexpected("Args value not an array");
+  if (external_program) {
+    if (program_called->arg_size() != 4)
+      return std::unexpected("External program " + program + " is illdefined");
+  } else {
+    if (program_called->arg_size() != 3)
+      return std::unexpected("Program " + program + " is illdefined");
   }
 
-  auto args_array = static_cast<llvm::ConstantVector*>(args_codegen.value());
+  std::vector<llvm::Value*> arg_values;
+  if (args.has_value()) {
+    auto args_codegen = args->get()->codegen(state);
+    UNWRAP_EXPECTED(args_codegen)
 
-  auto args_array_type =
-      static_cast<llvm::FixedVectorType*>(args_codegen.value()->getType());
+    if (!args_codegen.value()->getType()->isVectorTy()) {
+      return std::unexpected("Args value not an array");
+    }
 
-  if (args_array == nullptr || args_array_type == nullptr) {
-    return std::unexpected("Args value not an array");
+    auto args_array = static_cast<llvm::ConstantVector*>(args_codegen.value());
+
+    auto args_array_type =
+        static_cast<llvm::FixedVectorType*>(args_codegen.value()->getType());
+
+    if (args_array == nullptr || args_array_type == nullptr) {
+      return std::unexpected("Args value not an array");
+    }
+    auto stack_args = state.builder->CreateAlloca(
+        llvm::PointerType::get(*state.context, 0),
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
+                               args_array_type->getNumElements()));
+
+    state.builder->CreateStore(args_array, stack_args);
+
+    if (!state.named_values["variable_memory"].has_value()) {
+      return std::unexpected("Variable map does not exist");
+    }
+
+    if (external_program) {
+      arg_values = {
+          state.named_values["variable_memory"].value(),
+          state.builder->CreateGlobalString(program),
+          llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(*state.context),
+                                 args_array_type->getNumElements()),
+          stack_args};
+
+    } else {
+      arg_values = {
+          state.named_values["variable_memory"].value(),
+          llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(*state.context),
+                                 args_array_type->getNumElements()),
+          stack_args};
+    }
+  } else {
+    if (external_program) {
+      arg_values = {state.named_values["variable_memory"].value(),
+                    state.builder->CreateGlobalString(program),
+                    llvm::ConstantInt::get(
+                        llvm::IntegerType::getInt64Ty(*state.context), 0),
+                    llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(*state.context, 0))};
+    } else {
+      arg_values = {state.named_values["variable_memory"].value(),
+                    llvm::ConstantInt::get(
+                        llvm::IntegerType::getInt64Ty(*state.context), 0),
+                    llvm::ConstantPointerNull::get(
+                        llvm::PointerType::get(*state.context, 0))};
+    }
   }
-
-  auto stack_args = state.builder->CreateAlloca(
-      llvm::PointerType::get(*state.context, 0),
-      llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
-                             args_array_type->getNumElements()));
-
-  state.builder->CreateStore(args_array, stack_args);
-
-  if (!state.named_values["variable_memory"].has_value()) {
-    return std::unexpected("Variable map does not exist");
-  }
-
-  std::vector<llvm::Value*> arg_values = {
-      state.named_values["variable_memory"].value(),
-      llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(*state.context),
-                             args_array_type->getNumElements()),
-      stack_args};
-
   return state.builder->CreateCall(program_called, arg_values);
 }
 

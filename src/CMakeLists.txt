@@ -28,10 +28,8 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(isocline)
 
-set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wpedantic -fsanitize=address")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
-target_compile_options(llsh PRIVATE -Wall -Wextra)
-target_link_options(llsh PRIVATE -Wall -Wextra)
+target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
+target_link_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 
 target_link_libraries(llsh LLVM-22 isocline CLI11::CLI11)
 

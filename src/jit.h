@@ -37,7 +37,7 @@ class BashJIT {
 
   BashJIT(std::unique_ptr<llvm::orc::ExecutionSession> execution_session,
           llvm::orc::JITTargetMachineBuilder jit_target_builder,
-          llvm::DataLayout data_layout)
+          llvm::DataLayout data_layout, bool sandbox)
       : execution_session(std::move(execution_session)),
         mangle(*this->execution_session, this->data_layout),
         object_layer(*this->execution_session,
@@ -66,8 +66,14 @@ class BashJIT {
     cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
         #include "symbols.inc"
     })));
+
+    if (!sandbox) {
+      cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
+        SYMBOL(external_program)
+      })));
+    }
+
     // clang-format on
-    //
 #undef SYMBOL
   }
 
@@ -76,7 +82,8 @@ class BashJIT {
       execution_session->reportError(std::move(err));
   }
 
-  static std::expected<std::unique_ptr<BashJIT>, std::string> create() {
+  static std::expected<std::unique_ptr<BashJIT>, std::string> create(
+      bool sandbox) {
     auto executor_process = llvm::orc::SelfExecutorProcessControl::Create();
     if (!executor_process)
       return std::unexpected("Failed to make SelfExecutorProcessControl");
@@ -92,7 +99,7 @@ class BashJIT {
 
     return std::make_unique<BashJIT>(std::move(execution_session),
                                      std::move(jit_target_builder),
-                                     std::move(*data_layout));
+                                     std::move(*data_layout), sandbox);
   }
 
   std::expected<bool, std::string> add_module(

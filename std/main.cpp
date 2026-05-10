@@ -1,3 +1,6 @@
+#include <sys/wait.h>
+#include <unistd.h>
+
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -6,8 +9,10 @@
 #include <cstring>
 #include <map>
 #include <optional>
+#include <print>
 #include <string>
 #include <utility>
+#include <vector>
 
 struct OutputFactor {
   enum OutputLocation {
@@ -35,8 +40,8 @@ struct VariableMemory {
 
 extern "C" {
 void bash_echo(void* var_mem, uint64_t argc, char** argv) {
-  if (var_mem == 0) {
-    fprintf(stderr, "Runtime Issue: Variable memory is null\n");
+  if (var_mem == nullptr) {
+    std::println(stderr, "Runtime Issue: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -47,12 +52,12 @@ void bash_echo(void* var_mem, uint64_t argc, char** argv) {
       var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
     case OutputFactor::OUTPUT_STDOUT:
       for (uint64_t i = 0; i < argc; i++) {
-        printf("%s", argv[i]);
+        std::print("{}", argv[i]);
         if (i != argc - 1) {
-          printf(" ");
+          std::print(" ");
         }
       }
-      printf("\n");
+      std::println("");
       break;
 
     case OutputFactor::OUTPUT_STR:
@@ -82,8 +87,8 @@ void bash_echo(void* var_mem, uint64_t argc, char** argv) {
 }
 
 void bash_printf(void* var_mem, uint64_t argc, char** argv) {
-  if (var_mem == 0) {
-    fprintf(stderr, "Runtime Issue: Variable memory is null\n");
+  if (var_mem == nullptr) {
+    std::println(stderr, "Runtime Issue: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -133,7 +138,7 @@ void bash_printf(void* var_mem, uint64_t argc, char** argv) {
   switch (
       var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
     case OutputFactor::OUTPUT_STDOUT:
-      printf("%s", out_string.c_str());
+      std::print("{}", out_string);
       break;
 
     case OutputFactor::OUTPUT_STR:
@@ -150,9 +155,73 @@ void bash_printf(void* var_mem, uint64_t argc, char** argv) {
       break;
   }
 }
+void external_program(void* var_mem, char* path, uint64_t argc, char** argv) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "Runtime Issue: Variable memory is null");
+    return;
+  }
+  auto var_mem_usable = (VariableMemory*)var_mem;
+  switch (
+      var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
+    case OutputFactor::OUTPUT_STDOUT: {
+      pid_t output_id = fork();
+      if (output_id == 0) {
+        std::vector<char*> argv_vector;
+        argv_vector.push_back(path);
+        argv_vector.insert(argv_vector.end(), argv, argv + argc);
+        argv_vector.push_back(nullptr);
+        execvp(path, argv_vector.data());
+
+        return;
+      }
+      int status;
+      waitpid(output_id, &status, 0);
+    } break;
+
+    case OutputFactor::OUTPUT_STR: {
+      std::array<int, 2> link;
+      pipe(link.data());
+
+      if (fork() == 0) {
+        dup2(link[1], STDOUT_FILENO);
+        close(link[0]);
+        close(link[1]);
+
+        std::vector<char*> argv_vector;
+        argv_vector.push_back(path);
+        argv_vector.insert(argv_vector.end(), argv, argv + argc);
+        argv_vector.push_back(nullptr);
+        execvp(path, argv_vector.data());
+
+        return;
+      }
+      close(link[1]);
+      std::string output;
+      std::array<char, 4096> outbuffer;
+
+      ssize_t size = 0;
+
+      while ((size = read(link[0], outbuffer.data(), outbuffer.size())) != 0) {
+        output.insert(output.end(), outbuffer.begin(),
+                      outbuffer.begin() + size);
+      }
+
+      if (!var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+               .storage.has_value()) {
+        var_mem_usable->output_stack[var_mem_usable->stack_iterator].storage =
+            "";
+      }
+
+      var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+          .storage.value() += output;
+    } break;
+    case OutputFactor::OUTPUT_UNK:
+      break;
+  }
+}
 
 float str_to_float(char* str) {
-  auto val = std::strtof(str, NULL);
+  auto val = std::strtof(str, nullptr);
   return val;
 }
 size_t str_to_len(char* str) { return std::strlen(str); }
@@ -169,8 +238,8 @@ void int_to_str(int64_t i, char* buf, size_t buf_len) {
 }
 
 void* create_variable_memory() {
-  static void* var_mem_cache = NULL;
-  if (var_mem_cache == NULL) {
+  static void* var_mem_cache = nullptr;
+  if (var_mem_cache == nullptr) {
     var_mem_cache = new VariableMemory;
   }
 
@@ -179,8 +248,8 @@ void* create_variable_memory() {
 
 void store_variable_memory(void* var_mem, char* key_str, size_t key_len,
                            char* val_str, size_t val_len) {
-  if (var_mem == 0) {
-    fprintf(stderr, "Runtime Issue: Variable memory is null\n");
+  if (var_mem == nullptr) {
+    std::println(stderr, "Runtime Issue: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -189,8 +258,8 @@ void store_variable_memory(void* var_mem, char* key_str, size_t key_len,
 }
 
 void store_args_variable_memory(void* var_mem, uint64_t argc, char** argv) {
-  if (var_mem == 0) {
-    fprintf(stderr, "Runtime Issue: Variable memory is null\n");
+  if (var_mem == nullptr) {
+    std::println(stderr, "Runtime Issue: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -202,8 +271,8 @@ void store_args_variable_memory(void* var_mem, uint64_t argc, char** argv) {
 }
 
 const char* get_variable_memory(void* var_mem, char* key_str, size_t key_len) {
-  if (var_mem == 0) {
-    fprintf(stderr, "Runtime Issue: Variable memory is null\n");
+  if (var_mem == nullptr) {
+    std::println(stderr, "Runtime Issue: Variable memory is null");
     return "";
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -223,8 +292,8 @@ const char* get_variable_memory(void* var_mem, char* key_str, size_t key_len) {
 void free_variable_memory(void* var_mem) { delete (VariableMemory*)var_mem; }
 
 void push_output_stack(void* var_mem, uint16_t output_type) {
-  if (var_mem == 0) {
-    fprintf(stderr, "Runtime Issue: Variable memory is null\n");
+  if (var_mem == nullptr) {
+    std::println(stderr, "Runtime Issue: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -251,8 +320,8 @@ void push_output_stack(void* var_mem, uint16_t output_type) {
 // the return value stays in memory till the next frame on its level overwrites
 // it
 const char* pop_output_stack(void* var_mem) {
-  if (var_mem == 0) {
-    fprintf(stderr, "Runtime Issue: Variable memory is null\n");
+  if (var_mem == nullptr) {
+    std::println(stderr, "Runtime Issue: Variable memory is null");
     return "";
   }
 

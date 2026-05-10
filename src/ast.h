@@ -59,11 +59,12 @@ class StringExprAST : public ExprAST {
 
 class CallExprAST : public ExprAST {
   std::string program;
-  std::unique_ptr<ExprAST> args;
+  std::optional<std::unique_ptr<ExprAST>> args;
 
  public:
   CallExprAST(std::string program, std::unique_ptr<ExprAST> args)
       : program(program), args(std::move(args)) {}
+  CallExprAST(std::string program) : program(program) {}
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -74,7 +75,9 @@ class CallExprAST : public ExprAST {
     }
     std::print("CallExprAST \"{}\"\n", program);
 
-    args->print_name(level + 1);
+    if (args.has_value()) {
+      args->get()->print_name(level + 1);
+    }
   }
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;

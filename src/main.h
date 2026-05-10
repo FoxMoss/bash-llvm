@@ -14,10 +14,10 @@ enum OptimizationFlag {
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
                                 OptimizationFlag opt_flag, bool debug_lexer,
-                                bool debug_ast);
-void bash_repl(bool debug);
+                                bool debug_ast, bool sandbox);
+void bash_repl(bool debug, bool sandbox);
 
-void bash_interpret(std::string file_name, bool debug);
+void bash_interpret(std::string file_name, bool debug, bool sandbox);
 
 struct File {
   const std::string& contents() const noexcept;

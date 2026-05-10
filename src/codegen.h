@@ -22,6 +22,7 @@
 #include <format>
 #include <map>
 #include <memory>
+#include <print>
 
 struct CodegenState {
   std::unique_ptr<llvm::LLVMContext> context;
@@ -40,6 +41,7 @@ struct CodegenState {
   llvm::Function* entry;
 
   bool is_jit = false;
+  bool is_sandboxed = false;
 
   void generate_prototype(std::string name) {
     std::vector<llvm::Type*> func_args = {
@@ -60,13 +62,13 @@ struct CodegenState {
     llvm::Function* program_called =
         module->getFunction("create_variable_memory");
     if (!program_called) {
-      fprintf(stderr, "Issue finding create_variable_memory\n");
+      std::println(stderr, "Issue finding create_variable_memory");
       return;
     }
 
     // If argument mismatch error.
     if (program_called->arg_size() != 0) {
-      fprintf(stderr, "create_variable_memory is illdefined\n");
+      std::println(stderr, "create_variable_memory is illdefined");
       return;
     }
 
@@ -78,13 +80,13 @@ struct CodegenState {
     llvm::Function* program_called =
         module->getFunction("free_variable_memory");
     if (!program_called) {
-      fprintf(stderr, "Issue finding free_variable_memory\n");
+      std::println(stderr, "Issue finding free_variable_memory");
       return;
     }
 
     // If argument mismatch error.
     if (program_called->arg_size() != 1) {
-      fprintf(stderr, "free_variable_memory is illdefined\n");
+      std::println(stderr, "free_variable_memory is illdefined");
       return;
     }
 

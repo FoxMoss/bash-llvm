@@ -10,10 +10,10 @@
 #include "lexer.h"
 #include "main.h"
 
-void bash_interpret(std::string file_name, bool debug) {
+void bash_interpret(std::string file_name, bool debug, bool sandbox) {
   auto source_file = File::open(file_name);
-  if(source_file.has_value()){
-    std::fprintf(stderr, "Error %s does not exist.", file_name.c_str());
+  if (!source_file.has_value()) {
+    std::println(stderr, "Error {} does not exist.", file_name);
   }
   std::string file_contents = source_file->contents();
 
@@ -45,9 +45,8 @@ void bash_interpret(std::string file_name, bool debug) {
   size_t ast_cursor = 0;
   auto base = parse_compound_expression(lexer_segments, ast_cursor, true);
   if (!base.has_value()) {
-    std::fprintf(stderr, "Syntax error.");
+    std::println(stderr, "Syntax error.");
     return;
-  
   }
 
   if (debug) {
@@ -55,9 +54,11 @@ void bash_interpret(std::string file_name, bool debug) {
   }
 
   auto state = CodegenState(base.value()->get_functions_defined(), true);
-  auto jit = BashJIT::create();
+  state.is_sandboxed = sandbox;
+
+  auto jit = BashJIT::create(sandbox);
   if (!jit.has_value()) {
-    std::fprintf(stderr, "Couldn't make JIT: %s\n", jit.error().c_str());
+    std::println(stderr, "Couldn't make JIT: {}", jit.error());
   }
 
   state.module.get()->setDataLayout(jit->get()->data_layout);
@@ -74,17 +75,19 @@ void bash_interpret(std::string file_name, bool debug) {
 
   state.generate_variable_memory();
   if (!runtime_push_output_stack(state, 0).has_value()) {
-    printf("Error while pushing stack\n");
+    std::println("Error while pushing stack");
   }
 
   auto value = base.value()->codegen(state);
   if (!value.has_value()) {
-    std::print("Error: {}\n", value.error());
+    std::print(stderr, "Error: {}", value.error());
     return;
   }
 
   if (!runtime_pop_output_stack(state).has_value()) {
-    printf("Error while popping stack\n");
+    std::println(stderr, "Error while popping stack");
+    return;
+    ;
   }
 
   state.builder->CreateRetVoid();
@@ -95,13 +98,13 @@ void bash_interpret(std::string file_name, bool debug) {
   auto added_module =
       jit->get()->add_module(std::move(thread_safe_module), resource_tracker);
   if (!added_module.has_value()) {
-    std::fprintf(stderr, "Failed to add module");
+    std::print(stderr, "Failed to add module");
     return;
   }
 
   auto expr_symbol = jit->get()->lookup("main");
   if (!expr_symbol.has_value()) {
-    std::fprintf(stderr, "Failed to find expr");
+    std::print(stderr, "Failed to find expr");
     return;
   }
 
@@ -111,6 +114,6 @@ void bash_interpret(std::string file_name, bool debug) {
   auto err = resource_tracker->remove();
 
   if (err) {
-    std::fprintf(stderr, "Couldn't free resource_tracker.\n");
+    std::println(stderr, "Couldn't free resource_tracker.");
   }
 }

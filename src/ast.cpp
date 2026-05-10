@@ -234,10 +234,10 @@ std::optional<std::unique_ptr<ExprAST>> parse_curly_expression(
     RETURN_WITH_WARNING()
   }
 
-  bool has_comma = std::ranges::find_if(sub_segments,
-                                [](const BashLexerSegment& a) {
-                                  return a.token == TOK_COMMA;
-                                }) != sub_segments.end();
+  bool has_comma =
+      std::ranges::find_if(sub_segments, [](const BashLexerSegment& a) {
+        return a.token == TOK_COMMA;
+      }) != sub_segments.end();
 
   std::vector<std::unique_ptr<ExprAST>> content_array;
   std::optional<std::string> first;
@@ -313,10 +313,9 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
   std::string blob = "";
   while (!done) {
     current_segment = get_current_segment(lexer_segments, cursor);
-
-    skip_whitespace(lexer_segments, cursor);
-
-    current_segment = get_current_segment(lexer_segments, cursor);
+    if (!current_segment.has_value()) {
+      break;
+    }
 
     switch (current_segment->token) {
       case TOK_OPEN_CURLY:
@@ -350,9 +349,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           last_expr = std::move(ident);
         }
       } break;
-      case TOK_NUMERIC:
-        [[fallthrough]];
-      case TOK_SUB:
+      default:
         [[fallthrough]];
       case TOK_VALUE: {
         blob.append(current_segment->str);
@@ -396,8 +393,8 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
         // skip it
       case TOK_WHITESPACE:
         if (blob.size() != 0) {
-          blob.push_back(' ');
           auto value = std::make_unique<StringExprAST>(blob);
+          blob.clear();
 
           if (last_expr.has_value()) {
             last_expr = std::make_unique<ConcatExprAST>(
@@ -415,12 +412,23 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
         get_next_segment(lexer_segments, cursor);
         break;
 
+      case TOK_AND:
+        [[fallthrough]];
+      case TOK_AND_AND:
+        [[fallthrough]];
+      case TOK_OR:
+        [[fallthrough]];
+      case TOK_OR_OR:
+        [[fallthrough]];
+      case TOK_CLOSE_PAREN_PAREN:
+        [[fallthrough]];
+      case TOK_CLOSE_PAREN:
+        [[fallthrough]];
+      case TOK_EOF:
+        [[fallthrough]];
       case TOK_NEWLINE:
         [[fallthrough]];
       case TOK_SEMI_COLON:
-        [[fallthrough]];
-      default:
-
         if (blob.size() != 0) {
           auto value = std::make_unique<StringExprAST>(blob);
 
@@ -459,11 +467,12 @@ std::optional<std::unique_ptr<ExprAST>> parse_call_expression(
   if (program_name->str != "expr") {
     auto args = parse_floating_expression(lexer_segments, cursor);
     if (!args.has_value()) {
-      RETURN_WITH_WARNING()
+      return std::make_unique<CallExprAST>(program_name->str);
+    } else {
+      return std::make_unique<CallExprAST>(program_name->str,
+                                           std::move(args.value()));
     }
 
-    return std::make_unique<CallExprAST>(program_name->str,
-                                         std::move(args.value()));
   } else {
     auto lefthandside = parse_identifier_or_numeric(lexer_segments, cursor);
     if (!lefthandside.has_value()) {

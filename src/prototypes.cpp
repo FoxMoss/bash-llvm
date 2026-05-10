@@ -145,4 +145,18 @@ void CodegenState::generate_standard_library() {
                            "push_output_stack", module.get())
         ->setMemoryEffects(llvm::MemoryEffects::unknown());
   }
+
+  if (!is_sandboxed) {
+    std::vector<llvm::Type*> func_args = {
+        llvm::PointerType::get(*this->context, 0),
+        llvm::PointerType::get(*this->context, 0),
+        llvm::Type::getInt64Ty(*context),
+        llvm::PointerType::get(*this->context, 0)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::Type::getVoidTy(*context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "external_program", module.get());
+  }
 }
