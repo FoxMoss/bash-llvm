@@ -42,6 +42,7 @@ int main(int argc, char* argv[]) {
       dup2(bash_link[1], STDOUT_FILENO);
       close(bash_link[0]);
       close(bash_link[1]);
+      close(STDERR_FILENO);
       execl("/usr/bin/bash", "bash",
             std::filesystem::absolute(file.path()).c_str(), nullptr);
       return 0;
@@ -64,6 +65,7 @@ int main(int argc, char* argv[]) {
       dup2(impl_link[1], STDOUT_FILENO);
       close(impl_link[0]);
       close(impl_link[1]);
+      close(STDERR_FILENO);
       execl(std::filesystem::absolute(impl_progam).c_str(),
             impl_progam.filename().c_str(),
             std::filesystem::absolute(file.path()).c_str(), nullptr);

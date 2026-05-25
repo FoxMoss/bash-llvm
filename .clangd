@@ -1,4 +1,4 @@
 Diagnostics:
   ClangTidy:
-    Add: ['bugprone-*', 'modernize*']
+    Add: ['bugprone-*', 'modernize*', "bugprone-unchecked-optional-access"]
     Remove: modernize-use-trailing-return-type

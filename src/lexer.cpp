@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <map>
 #include <optional>
+#include <print>
 #include <set>
 #include <unordered_map>
 #include <utility>
@@ -13,8 +14,9 @@
 bool is_alpha(char c) {
   bool lowercase = ('a' <= c && c <= 'z');
   bool uppercase = ('A' <= c && c <= 'Z');
+  bool is_bonus = c < 0;
 
-  return uppercase || lowercase || c == '_';
+  return uppercase || lowercase || c == '_' || is_bonus;
 }
 bool is_numeric(char c) {
   bool num = ('0' <= c && c <= '9');
@@ -25,8 +27,9 @@ bool is_alpha_numeric(char c) {
   bool lowercase = ('a' <= c && c <= 'z');
   bool uppercase = ('A' <= c && c <= 'Z');
   bool num = ('0' <= c && c <= '9');
+  bool is_bonus = c < 0;
 
-  return uppercase || lowercase || num || c == '_';
+  return uppercase || lowercase || num || c == '_' || is_bonus;
 }
 bool is_whitespace(char c) { return c == ' ' || c == '\t'; }
 
@@ -146,14 +149,15 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     auto start_char = current_char;
     std::vector<BashLexerSegment> ret;
     if (current_char == ')') {
-      paren_map.relevant_indices.push_back(
-          {my_index, paren_map.level_counter, false});
+      paren_map.relevant_indices.emplace_back(my_index, paren_map.level_counter,
+                                              false);
       if (paren_map.level_map.contains(paren_map.level_counter)) {
         paren_map.close_map[std::get<0>(
             paren_map.level_map[paren_map.level_counter].value())] = my_index;
       }
 
-      ret.push_back(BashLexerSegment(TOK_CLOSE_PAREN, ")"));
+      ret.emplace_back(TOK_CLOSE_PAREN, ")");
+      ret.emplace_back(TOK_CONCAT_SILENT, "");
       start_char =
           std::get<2>(paren_map.level_map[paren_map.level_counter].value());
 
@@ -176,7 +180,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
         escaping = false;
       } else {
         if (current_char == '$' && !escaping) {
-          ret.push_back(BashLexerSegment(TOK_VALUE, inner_text));
+          ret.emplace_back(TOK_VALUE, inner_text);
           inner_text.clear();
 
           auto next_char = peek_char(source, cursor);
@@ -185,13 +189,14 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
 
             auto real_index = my_index + ret.size();
             paren_map.level_counter++;
-            paren_map.relevant_indices.push_back(
-                {real_index, paren_map.level_counter, true});
+            paren_map.relevant_indices.emplace_back(
+                real_index, paren_map.level_counter, true);
 
             paren_map.level_map[paren_map.level_counter] = {real_index, true,
                                                             start_char.value()};
 
-            ret.push_back(BashLexerSegment(TOK_INJECT_STR, "$("));
+            ret.emplace_back(TOK_CONCAT_SILENT, "");
+            ret.emplace_back(TOK_INJECT_STR, "$(");
             return ret;
           } else {
             while (next_char.has_value() &&
@@ -202,7 +207,9 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
             }
           }
 
-          ret.push_back(BashLexerSegment(TOK_IDENTIFIER, inner_text));
+          ret.emplace_back(TOK_CONCAT_SILENT, "");
+          ret.emplace_back(TOK_IDENTIFIER, inner_text);
+          ret.emplace_back(TOK_CONCAT_SILENT, "");
           inner_text.clear();
         } else {
           inner_text.push_back(current_char.value());
@@ -210,7 +217,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
         escaping = false;  // we're done escaping
       }
     } while (!(current_char == start_char && !escaping));
-    ret.push_back(BashLexerSegment(TOK_VALUE, inner_text));
+    ret.emplace_back(TOK_VALUE, inner_text);
 
     return ret;
   } else if (current_char == '=') {
@@ -261,7 +268,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_RANGE, token)};
     }
-    printf("ERROR: Single period is unacceptable\n");
+    std::println(stderr, "Error: Single period is unacceptable");
     return {BashLexerSegment(TOK_UNK, token)};
   } else if (current_char == '(') {
     std::optional<char> next_char = peek_char(source, cursor);
@@ -271,13 +278,13 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     }
 
     paren_map.level_counter++;
-    paren_map.relevant_indices.push_back(
-        {my_index, paren_map.level_counter, true});
+    paren_map.relevant_indices.emplace_back(my_index, paren_map.level_counter,
+                                            true);
     paren_map.level_map[paren_map.level_counter] = {my_index, true, 0};
     return {BashLexerSegment(TOK_OPEN_PAREN, token)};
   } else if (current_char == ')') {
-    paren_map.relevant_indices.push_back(
-        {my_index, paren_map.level_counter, false});
+    paren_map.relevant_indices.emplace_back(my_index, paren_map.level_counter,
+                                            false);
     if (paren_map.level_map.contains(paren_map.level_counter)) {
       paren_map.close_map[std::get<0>(
           paren_map.level_map[paren_map.level_counter].value())] = my_index;
@@ -312,6 +319,16 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
       return {BashLexerSegment(TOK_MINUS_EQ, token)};
     }
 
+    if (is_alpha_numeric(next_char.value())) {
+      std::optional<char> next_char = peek_char(source, cursor);
+      while (next_char.has_value() && is_alpha_numeric(next_char.value())) {
+        current_char = read_char(source, cursor, token);
+        next_char = peek_char(source, cursor);
+      }
+
+      return {BashLexerSegment(TOK_VALUE, token)};
+    }
+
     return {BashLexerSegment(TOK_SUB, token)};
   } else if (current_char == '+') {
     std::optional<char> next_char = peek_char(source, cursor);
@@ -336,7 +353,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     return {BashLexerSegment(TOK_NEWLINE, token)};
   }
 
-  printf("ERROR: Unknown token: %s\n", token.c_str());
+  std::println(stderr, "Error: Unknown token: {}", token);
   return {BashLexerSegment(TOK_UNK, token)};
 }
 
@@ -375,9 +392,9 @@ std::vector<BashLexerSegment> paren_map_fusing(
   for (size_t index = 0; index < inputs.size(); index++) {
     if (fuse_map.contains(index)) {
       if (inputs[index].token == TOK_OPEN_PAREN)
-        fused_ret.push_back(BashLexerSegment(TOK_OPEN_PAREN_PAREN, "(("));
+        fused_ret.emplace_back(TOK_OPEN_PAREN_PAREN, "((");
       else if (inputs[index].token == TOK_CLOSE_PAREN)
-        fused_ret.push_back(BashLexerSegment(TOK_CLOSE_PAREN_PAREN, "))"));
+        fused_ret.emplace_back(TOK_CLOSE_PAREN_PAREN, "))");
       index++;
     } else {
       fused_ret.push_back(inputs[index]);

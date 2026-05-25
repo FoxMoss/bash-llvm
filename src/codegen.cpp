@@ -1058,10 +1058,16 @@ std::expected<llvm::Value*, std::string> ConditionExprAST::codegen(
   switch (op) {
     case CONDITION_EQ:
       return state.builder->CreateFCmpOEQ(first_f.value(), second_f.value());
-    case CONDITION_GT:
-      return state.builder->CreateFCmpOGT(first_f.value(), second_f.value());
+    case CONDITION_NE:
+      return state.builder->CreateFCmpONE(first_f.value(), second_f.value());
     case CONDITION_LT:
       return state.builder->CreateFCmpOLT(first_f.value(), second_f.value());
+    case CONDITION_LE:
+      return state.builder->CreateFCmpOLE(first_f.value(), second_f.value());
+    case CONDITION_GT:
+      return state.builder->CreateFCmpOGT(first_f.value(), second_f.value());
+    case CONDITION_GE:
+      return state.builder->CreateFCmpOGE(first_f.value(), second_f.value());
   }
   std::unreachable();
 }

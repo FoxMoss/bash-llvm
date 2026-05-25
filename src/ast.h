@@ -463,9 +463,12 @@ class ForInExprAST : public ForExprAST {
 class ConditionExprAST : public ExprAST {
  public:
   enum ConditonOperator {
-    CONDITION_LT,
-    CONDITION_GT,
     CONDITION_EQ,
+    CONDITION_NE,
+    CONDITION_LT,
+    CONDITION_LE,
+    CONDITION_GT,
+    CONDITION_GE,
   };
 
  private:
@@ -628,9 +631,9 @@ class InjectIntoStringAST : public ExprAST {
 std::optional<std::unique_ptr<ExprAST>> parse_compound_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
     bool top_level = false);
-std::optional<std::unique_ptr<ExprAST>> parse_expression(
-    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
-    bool top_level = false, bool parse_ops = true);
+std::expected<std::optional<std::unique_ptr<ExprAST>>, std::string>
+parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
+                 size_t& cursor, bool top_level = false, bool parse_ops = true);
 std::optional<std::unique_ptr<ExprAST>> parse_paren_math_expression(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor);
 std::optional<std::unique_ptr<ExprAST>> parse_operator_math_expression(
