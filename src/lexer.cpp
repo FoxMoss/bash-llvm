@@ -268,8 +268,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_RANGE, token)};
     }
-    std::println(stderr, "Error: Single period is unacceptable");
-    return {BashLexerSegment(TOK_UNK, token)};
+    return {BashLexerSegment(TOK_DOT, token)};
   } else if (current_char == '(') {
     std::optional<char> next_char = peek_char(source, cursor);
     if (next_char.value() == ')') {  // ()

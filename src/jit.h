@@ -20,7 +20,7 @@
 #include <memory>
 #include <print>
 
-#include "std.h"
+#include "../std/main.h"
 
 // based on
 // https://github.com/llvm/llvm-project/blob/main/llvm/examples/Kaleidoscope/include/KaleidoscopeJIT.h

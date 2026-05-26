@@ -34,7 +34,8 @@ std::optional<File> File::open(std::string_view file_name) {
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
                                 OptimizationFlag opt_flag, bool debug_lexer,
-                                bool debug_ast, bool sandbox) {
+                                bool debug_ast, bool sandbox,
+                                std::optional<std::string> ir_file) {
   bool print_lexed = debug_lexer;
   bool print_ast = debug_ast;
 
@@ -99,21 +100,7 @@ std::optional<File> File::open(std::string_view file_name) {
 
   // entry function
   {
-    llvm::FunctionType* entry_type =
-        llvm::FunctionType::get(llvm::Type::getVoidTy(*state.context), false);
-
-    state.entry =
-        llvm::Function::Create(entry_type, llvm::Function::ExternalLinkage,
-                               "main", state.module.get());
-
-    llvm::BasicBlock* entry_block =
-        llvm::BasicBlock::Create(*state.context, "entry", state.entry);
-    state.builder->SetInsertPoint(entry_block);
-
-    state.generate_variable_memory();
-    if (!runtime_push_output_stack(state, 0).has_value()) {
-      std::println(stderr, "Error while pushing stack");
-    }
+    state.generate_entry();
 
     auto value = base.value()->codegen(state);
     if (!value.has_value()) {
@@ -121,12 +108,7 @@ std::optional<File> File::open(std::string_view file_name) {
       return false;
     }
 
-    if (!runtime_pop_output_stack(state).has_value()) {
-      std::println(stderr, "Error while popping stack");
-    }
-    state.free_variable_memory(state.named_values["variable_memory"].value());
-
-    state.builder->CreateRetVoid();
+    state.generate_exit(false);
 
     llvm::OptimizationLevel llvm_level;
     switch (opt_flag) {
@@ -179,6 +161,11 @@ std::optional<File> File::open(std::string_view file_name) {
   out_file.flush();
 
   delete target_machine;
+
+  if (ir_file.has_value()) {
+    llvm::raw_fd_ostream ir_out_file(ir_file.value(), error_code);
+    state.module->print(ir_out_file, nullptr);
+  }
 
   return true;
 }

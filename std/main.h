@@ -29,8 +29,8 @@ struct VariableMemory {
 
 extern "C" {
 void bash_echo(void* var_mem, uint64_t argc, char** argv);
-
 void bash_printf(void* var_mem, uint64_t argc, char** argv);
+void bash_cd(void* var_mem, uint64_t argc, char** argv);
 
 void external_program(void* var_mem, char* path, uint64_t argc, char** argv);
 
@@ -40,14 +40,15 @@ size_t int_len(int64_t i);
 
 void int_to_str(int64_t i, char* buf, size_t buf_len);
 
-void* create_variable_memory();
+void* create_variable_memory(bool sandboxed);
 
-void store_variable_memory(void* var_mem, char* key_str, size_t key_len,
-                           char* val_str, size_t val_len);
+void store_variable_memory(void* var_mem, const char* key_str, size_t key_len,
+                           const char* val_str, size_t val_len);
 
 void store_args_variable_memory(void* var_mem, uint64_t argc, char** argv);
 
-const char* get_variable_memory(void* var_mem, char* key_str, size_t key_len);
+const char* get_variable_memory(void* var_mem, const char* key_str,
+                                size_t key_len);
 
 void free_variable_memory(void* var_mem);
 

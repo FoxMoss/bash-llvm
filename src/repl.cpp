@@ -5,6 +5,7 @@
 #include <print>
 #include <string>
 
+#include "../std/main.h"
 #include "ast.h"
 #include "isocline.h"
 #include "jit.h"
@@ -48,10 +49,15 @@ void bash_repl(bool debug, bool sandbox) {
   state.init_llvm();
   state.module->setDataLayout(jit->get()->data_layout);
 
+  auto* var_mem = (VariableMemory*)create_variable_memory(sandbox);
+
+  std::string pwd_key = "PWD";
   std::string path = std::filesystem::current_path();
 
   char* input;
   while ((input = ic_readline(path.c_str())) != nullptr) {
+    store_variable_memory(var_mem, pwd_key.c_str(), pwd_key.size(),
+                          path.c_str(), path.size());
     size_t cursor = 0;
 
     std::optional<std::vector<BashLexerSegment>> last_token;
@@ -86,21 +92,7 @@ void bash_repl(bool debug, bool sandbox) {
       base.value()->print_name(0);
     }
 
-    llvm::FunctionType* entry_type =
-        llvm::FunctionType::get(llvm::Type::getVoidTy(*state.context), false);
-
-    state.entry =
-        llvm::Function::Create(entry_type, llvm::Function::ExternalLinkage,
-                               "main", state.module.get());
-
-    llvm::BasicBlock* entry_block =
-        llvm::BasicBlock::Create(*state.context, "entry", state.entry);
-    state.builder->SetInsertPoint(entry_block);
-
-    state.generate_variable_memory();
-    if (!runtime_push_output_stack(state, 0).has_value()) {
-      std::println(stderr, "Error while pushing stack");
-    }
+    state.generate_entry();
 
     auto value = base.value()->codegen(state);
     if (!value.has_value()) {
@@ -115,12 +107,7 @@ void bash_repl(bool debug, bool sandbox) {
       continue;
     }
 
-    if (!runtime_pop_output_stack(state).has_value()) {
-      std::println(stderr, "Error while popping stack");
-      return;
-    }
-
-    state.builder->CreateRetVoid();
+    state.generate_exit(true);
 
     auto resource_tracker = jit->get()->main_jit_dylib.createResourceTracker();
 
@@ -151,6 +138,7 @@ void bash_repl(bool debug, bool sandbox) {
     state.init_llvm();
     state.module->setDataLayout(jit->get()->data_layout);
 
+    path = std::filesystem::current_path();
     free(input);
   }
 

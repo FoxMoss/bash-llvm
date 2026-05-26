@@ -544,7 +544,11 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
                                args_array_type->getNumElements()));
 
-    state.builder->CreateStore(args_array, stack_args);
+    Align prefered_align =
+        state.builder->GetInsertBlock()->getDataLayout().getPrefTypeAlign(
+            llvm::PointerType::get(*state.context, 0));
+
+    state.builder->CreateAlignedStore(args_array, stack_args, prefered_align);
 
     if (!state.named_values["variable_memory"].has_value()) {
       return std::unexpected("Variable map does not exist");
@@ -1247,57 +1251,13 @@ std::expected<llvm::Value*, std::string> IfAST::codegen(CodegenState& state) {
   return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
 }
 
-std::expected<void, std::string> runtime_push_output_stack(
-    CodegenState& state, uint16_t location_type) {
-  if (!state.named_values["variable_memory"].has_value()) {
-    return std::unexpected("Variable map does not exist");
-  }
-
-  llvm::Function* program_called =
-      state.module->getFunction("push_output_stack");
-  if (!program_called)
-    return std::unexpected("push_output_stack does not exist");
-
-  // If argument mismatch error.
-  if (program_called->arg_size() != 2)
-    return std::unexpected("Helper push_output_stack is illdefined");
-
-  std::vector<llvm::Value*> arg_values = {
-      state.named_values["variable_memory"].value(),
-      llvm::ConstantInt::get(llvm::Type::getInt16Ty(*state.context),
-                             location_type)};
-
-  state.builder->CreateCall(program_called, arg_values);
-  return {};
-}
-std::expected<llvm::Value*, std::string> runtime_pop_output_stack(
-    CodegenState& state) {
-  if (!state.named_values["variable_memory"].has_value()) {
-    return std::unexpected("Variable map does not exist");
-  }
-
-  llvm::Function* program_called =
-      state.module->getFunction("pop_output_stack");
-  if (!program_called)
-    return std::unexpected("pop_output_stack does not exist");
-
-  // If argument mismatch error.
-  if (program_called->arg_size() != 1)
-    return std::unexpected("Helper pop_output_stack is illdefined");
-
-  std::vector<llvm::Value*> arg_values = {
-      state.named_values["variable_memory"].value()};
-
-  return state.builder->CreateCall(program_called, arg_values);
-}
-
 std::expected<llvm::Value*, std::string> InjectIntoStringAST::codegen(
     CodegenState& state) {
-  auto pushed_stack = runtime_push_output_stack(state, 1 /* 1 == OUTPUT_STR */);
+  auto pushed_stack = state.runtime_push_output_stack(1 /* 1 == OUTPUT_STR */);
   UNWRAP_EXPECTED(pushed_stack)
   auto body_val = body->codegen(state);
   UNWRAP_EXPECTED(body_val)
 
-  return runtime_pop_output_stack(state);
+  return state.runtime_pop_output_stack();
 }
 

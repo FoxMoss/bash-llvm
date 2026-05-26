@@ -1,12 +1,17 @@
+#include "main.h"
+
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <format>
 #include <map>
 #include <optional>
 #include <print>
@@ -14,34 +19,50 @@
 #include <utility>
 #include <vector>
 
-struct OutputFactor {
-  enum OutputLocation {
-    OUTPUT_STDOUT = 0,
-    OUTPUT_STR = 1,
-    OUTPUT_UNK = 2  // UNK must always be the largest and there can no be no
-                    // gaps otherwise checking fails
-  } location;
-
-  std::map<std::string, std::string> positional_arguments;
-
-  std::optional<std::string> storage;
-};
-
-struct VariableMemory {
-  std::map<std::string, std::string> memory;
-  std::map<uint64_t, OutputFactor> output_stack;
-  uint64_t stack_iterator;
-};
-
-#define REPORT_ISSUE(str) fprintf(stderr, "Runtime Issue: %s\n", str);
+#define REPORT_ISSUE(str) fprintf(stderr, "llsh: %s\n", str);
 #define USE_VAR_MEM()                                        \
   if (var_mem == 0) REPORT_ISSUE("Variable Memory is null"); \
   auto var_mem_usable = (VariableMemory*)var_mem;
 
+std::vector<std::string> colapse_enviroment(void* var_mem) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "llsh: Variable memory is null");
+    return {};
+  }
+  std::vector<std::string> ret;
+
+  auto var_mem_usable = (VariableMemory*)var_mem;
+
+  for (auto pair : var_mem_usable->memory) {
+    ret.push_back(std::format("{}={}", pair.first, pair.second));
+  }
+
+  return ret;
+}
+
 extern "C" {
+void bash_cd(void* var_mem, uint64_t argc, char** argv) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "llsh: Variable memory is null");
+    return;
+  }
+
+  if (argc != 1) {
+    std::println(stderr, "llsh: cd: too many arguments");
+    return;
+  }
+  const std::string pwd_key = "PWD";
+  auto pwd_path =
+      std::filesystem::absolute(std::filesystem::current_path() / argv[0]);
+  store_variable_memory(var_mem, pwd_key.c_str(), pwd_key.size(),
+                        pwd_path.string().c_str(), pwd_path.string().size());
+
+  std::filesystem::current_path(pwd_path);
+}
+
 void bash_echo(void* var_mem, uint64_t argc, char** argv) {
   if (var_mem == nullptr) {
-    std::println(stderr, "Runtime Issue: Variable memory is null");
+    std::println(stderr, "llsh: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -88,7 +109,7 @@ void bash_echo(void* var_mem, uint64_t argc, char** argv) {
 
 void bash_printf(void* var_mem, uint64_t argc, char** argv) {
   if (var_mem == nullptr) {
-    std::println(stderr, "Runtime Issue: Variable memory is null");
+    std::println(stderr, "llsh: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -157,20 +178,70 @@ void bash_printf(void* var_mem, uint64_t argc, char** argv) {
 }
 void external_program(void* var_mem, char* path, uint64_t argc, char** argv) {
   if (var_mem == nullptr) {
-    std::println(stderr, "Runtime Issue: Variable memory is null");
+    std::println(stderr, "llsh: Variable memory is null");
     return;
   }
+
   auto var_mem_usable = (VariableMemory*)var_mem;
+
+  std::string path_key = "PATH";
+  auto path_var =
+      get_variable_memory(var_mem, path_key.c_str(), path_key.size());
+  auto path_var_len = strlen(path_var);
+
+  std::vector<std::filesystem::path> paths;
+  std::string glob;
+  for (size_t i = 0; i < path_var_len; i++) {
+    if (path_var[i] == ':' && !glob.empty()) {
+      auto glob_path = std::filesystem::path(glob);
+      glob.clear();
+      if (!std::filesystem::is_directory(glob_path)) {
+        continue;
+      }
+
+      paths.emplace_back(glob_path);
+      continue;
+    }
+    glob.push_back(path_var[i]);
+  }
+  if (glob.empty()) {
+    paths.emplace_back(glob);
+  }
+
+  std::optional<std::string> extended_path;
+  for (auto dir : paths) {
+    std::filesystem::directory_iterator dir_iter(dir);
+    for (auto dir_file : dir_iter) {
+      if (!dir_file.is_regular_file()) continue;
+      if (dir_file.path().filename() != path) continue;
+      extended_path = dir_file.path();
+      goto found_path;
+    }
+  }
+found_path:
+
+  if (!extended_path.has_value()) {
+    std::println(stderr, "llsh: {}: command not found", path);
+    return;
+  }
+
+  auto environ_data = colapse_enviroment(var_mem);
+  std::vector<char*> environ_cstr;
+  for (auto var : environ_data) {
+    environ_cstr.push_back((char*)var.c_str());
+  }
+  environ_cstr.push_back(nullptr);
+
   switch (
       var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
     case OutputFactor::OUTPUT_STDOUT: {
       pid_t output_id = fork();
       if (output_id == 0) {
         std::vector<char*> argv_vector;
-        argv_vector.push_back(path);
+        argv_vector.push_back((char*)extended_path->c_str());
         argv_vector.insert(argv_vector.end(), argv, argv + argc);
         argv_vector.push_back(nullptr);
-        execvp(path, argv_vector.data());
+        execve(extended_path->c_str(), argv_vector.data(), environ_cstr.data());
 
         return;
       }
@@ -188,10 +259,10 @@ void external_program(void* var_mem, char* path, uint64_t argc, char** argv) {
         close(link[1]);
 
         std::vector<char*> argv_vector;
-        argv_vector.push_back(path);
+        argv_vector.push_back((char*)extended_path->c_str());
         argv_vector.insert(argv_vector.end(), argv, argv + argc);
         argv_vector.push_back(nullptr);
-        execvp(path, argv_vector.data());
+        execve(extended_path->c_str(), argv_vector.data(), environ_cstr.data());
 
         return;
       }
@@ -237,19 +308,33 @@ void int_to_str(int64_t i, char* buf, size_t buf_len) {
   snprintf(buf, buf_len, "%ld", i);
 }
 
-void* create_variable_memory() {
+void* create_variable_memory(bool sandboxed) {
   static void* var_mem_cache = nullptr;
   if (var_mem_cache == nullptr) {
     var_mem_cache = new VariableMemory;
+
+    if (!sandboxed) {
+      size_t environ_cursor = 0;
+      while (environ[environ_cursor] != nullptr) {
+        std::string line = environ[environ_cursor];
+        auto first_eq = line.find_first_of('=');
+        auto key = line.substr(0, first_eq);
+        auto val = line.substr(first_eq + 1, line.size() - first_eq);
+        store_variable_memory(var_mem_cache, key.c_str(), key.size(),
+                              val.c_str(), val.size());
+
+        environ_cursor++;
+      }
+    }
   }
 
   return var_mem_cache;
 }
 
-void store_variable_memory(void* var_mem, char* key_str, size_t key_len,
-                           char* val_str, size_t val_len) {
+void store_variable_memory(void* var_mem, const char* key_str, size_t key_len,
+                           const char* val_str, size_t val_len) {
   if (var_mem == nullptr) {
-    std::println(stderr, "Runtime Issue: Variable memory is null");
+    std::println(stderr, "llsh: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -259,7 +344,7 @@ void store_variable_memory(void* var_mem, char* key_str, size_t key_len,
 
 void store_args_variable_memory(void* var_mem, uint64_t argc, char** argv) {
   if (var_mem == nullptr) {
-    std::println(stderr, "Runtime Issue: Variable memory is null");
+    std::println(stderr, "llsh: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -270,9 +355,10 @@ void store_args_variable_memory(void* var_mem, uint64_t argc, char** argv) {
   }
 }
 
-const char* get_variable_memory(void* var_mem, char* key_str, size_t key_len) {
+const char* get_variable_memory(void* var_mem, const char* key_str,
+                                size_t key_len) {
   if (var_mem == nullptr) {
-    std::println(stderr, "Runtime Issue: Variable memory is null");
+    std::println(stderr, "llsh: Variable memory is null");
     return "";
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -293,7 +379,7 @@ void free_variable_memory(void* var_mem) { delete (VariableMemory*)var_mem; }
 
 void push_output_stack(void* var_mem, uint16_t output_type) {
   if (var_mem == nullptr) {
-    std::println(stderr, "Runtime Issue: Variable memory is null");
+    std::println(stderr, "llsh: Variable memory is null");
     return;
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
@@ -321,7 +407,7 @@ void push_output_stack(void* var_mem, uint16_t output_type) {
 // it
 const char* pop_output_stack(void* var_mem) {
   if (var_mem == nullptr) {
-    std::println(stderr, "Runtime Issue: Variable memory is null");
+    std::println(stderr, "llsh: Variable memory is null");
     return "";
   }
 

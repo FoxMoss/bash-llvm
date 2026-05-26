@@ -67,15 +67,118 @@ struct CodegenState {
     }
 
     // If argument mismatch error.
-    if (program_called->arg_size() != 0) {
+    if (program_called->arg_size() != 1) {
       std::println(stderr, "create_variable_memory is illdefined");
       return;
     }
 
-    auto var_mem = builder->CreateCall(program_called, {});
+    auto var_mem = builder->CreateCall(
+        program_called, {llvm::ConstantInt::getBool(*context, is_sandboxed)});
 
     named_values["variable_memory"] = var_mem;
   }
+
+  void store_variable_memory(std::string name, std::string val) {
+    if (!named_values["variable_memory"].has_value()) {
+      std::println("Variable map does not exist");
+      return;
+    }
+
+    llvm::Function* program_called =
+        module->getFunction("store_variable_memory");
+    if (!program_called) {
+      std::println("Variable getter does not exist");
+      return;
+    }
+
+    // If argument mismatch error.
+    if (program_called->arg_size() != 5) {
+      std::println("Helper store_variable_memory is illdefined");
+      return;
+    }
+
+    std::vector<llvm::Value*> arg_values = {
+        named_values["variable_memory"].value(),
+        builder->CreateGlobalString(name),
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), name.size()),
+        builder->CreateGlobalString(val),
+        llvm::ConstantInt::get(llvm::Type::getInt64Ty(*context), val.size())};
+
+    builder->CreateCall(program_called, arg_values);
+  }
+
+  std::expected<void, std::string> runtime_push_output_stack(
+      uint16_t location_type) {
+    if (!named_values["variable_memory"].has_value()) {
+      return std::unexpected("Variable map does not exist");
+    }
+
+    llvm::Function* program_called = module->getFunction("push_output_stack");
+    if (!program_called)
+      return std::unexpected("push_output_stack does not exist");
+
+    // If argument mismatch error.
+    if (program_called->arg_size() != 2)
+      return std::unexpected("Helper push_output_stack is illdefined");
+
+    std::vector<llvm::Value*> arg_values = {
+        named_values["variable_memory"].value(),
+        llvm::ConstantInt::get(llvm::Type::getInt16Ty(*context),
+                               location_type)};
+
+    builder->CreateCall(program_called, arg_values);
+    return {};
+  }
+
+  std::expected<llvm::Value*, std::string> runtime_pop_output_stack() {
+    if (!named_values["variable_memory"].has_value()) {
+      return std::unexpected("Variable map does not exist");
+    }
+
+    llvm::Function* program_called = module->getFunction("pop_output_stack");
+    if (!program_called)
+      return std::unexpected("pop_output_stack does not exist");
+
+    // If argument mismatch error.
+    if (program_called->arg_size() != 1)
+      return std::unexpected("Helper pop_output_stack is illdefined");
+
+    std::vector<llvm::Value*> arg_values = {
+        named_values["variable_memory"].value()};
+
+    return builder->CreateCall(program_called, arg_values);
+  }
+
+  void generate_entry() {
+    llvm::FunctionType* entry_type =
+        llvm::FunctionType::get(llvm::Type::getVoidTy(*context), false);
+
+    entry = llvm::Function::Create(entry_type, llvm::Function::ExternalLinkage,
+                                   "main", module.get());
+
+    llvm::BasicBlock* entry_block =
+        llvm::BasicBlock::Create(*context, "entry", entry);
+    builder->SetInsertPoint(entry_block);
+
+    generate_variable_memory();
+    if (!runtime_push_output_stack(0).has_value()) {
+      std::println(stderr, "Error while pushing stack");
+    }
+  }
+
+  void generate_exit(bool continue_state) {
+    if (!runtime_pop_output_stack().has_value()) {
+      std::println(stderr, "Error while popping stack");
+      return;
+    }
+
+    if (!continue_state) {
+      free_variable_memory(named_values["variable_memory"].value());
+    }
+
+    builder->CreateRetVoid();
+  }
+
   void free_variable_memory(llvm::Value* var_mem) {
     llvm::Function* program_called =
         module->getFunction("free_variable_memory");

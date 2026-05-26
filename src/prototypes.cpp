@@ -4,6 +4,7 @@
 void CodegenState::generate_standard_library() {
   generate_prototype("echo");
   generate_prototype("printf");
+  generate_prototype("cd");
 
   {
     std::vector<llvm::Type*> bash_func_args = {
@@ -52,7 +53,7 @@ void CodegenState::generate_standard_library() {
   }
 
   {
-    std::vector<llvm::Type*> bash_func_args = {};
+    std::vector<llvm::Type*> bash_func_args = {llvm::Type::getInt1Ty(*context)};
 
     llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
         llvm::PointerType::get(*this->context, 0), bash_func_args, false);

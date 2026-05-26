@@ -1,5 +1,6 @@
 SYMBOL(bash_echo)
 SYMBOL(bash_printf)
+SYMBOL(bash_cd)
 
 SYMBOL(str_to_float)
 SYMBOL(str_to_len)

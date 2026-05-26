@@ -647,8 +647,3 @@ std::unique_ptr<TO> static_unique_pointer_cast(std::unique_ptr<FROM>&& old) {
   // conversion: unique_ptr<FROM>->FROM*->TO*->unique_ptr<TO>
 }
 
-std::expected<void, std::string> runtime_push_output_stack(
-    CodegenState& state, uint16_t location_type);
-std::expected<llvm::Value*, std::string> runtime_pop_output_stack(
-    CodegenState& state);
-

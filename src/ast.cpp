@@ -387,13 +387,29 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
   // last_expr should always be reducible to a string for string concatiation
 
   while (!done) {
-    skip_whitespace(lexer_segments, cursor);
     current_segment = get_current_segment(lexer_segments, cursor);
     if (!current_segment.has_value()) {
       break;
     }
 
     switch (current_segment->token) {
+      case TOK_WHITESPACE:
+        get_next_segment(lexer_segments, cursor);
+
+        if (last_expr.has_value()) {
+          if (colapsed.has_value()) {
+            colapsed = std::make_unique<ConcatExprAST>(
+                std::move(colapsed.value()),
+                std::make_unique<ConvertToRangeArrayExprAST>(
+                    std::move(last_expr.value())));
+            last_expr = {};
+          } else {
+            colapsed = std::make_unique<ConvertToRangeArrayExprAST>(
+                std::move(last_expr.value()));
+            last_expr = {};
+          }
+        }
+        break;
       case TOK_OPEN_CURLY: {
         auto curly = parse_curly_expression(lexer_segments, cursor);
         if (!curly.has_value()) {
@@ -410,6 +426,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           } else {
             colapsed = std::make_unique<ConvertToRangeArrayExprAST>(
                 std::move(last_expr.value()));
+            last_expr = {};
           }
         }
 
@@ -433,30 +450,26 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           RETURN_WITH_WARNING();
         }
 
+        if (!last_expr.has_value()) {
+          RETURN_WITH_WARNING();
+        }
         last_expr = std::make_unique<ConcatStringsAST>(
             std::move(last_expr.value()), std::move(second_arg.value()));
       } break;
       default: {
-        if (last_expr.has_value()) {
-          if (colapsed.has_value()) {
-            colapsed = std::make_unique<ConcatExprAST>(
-                std::move(colapsed.value()),
-                std::make_unique<ConvertToRangeArrayExprAST>(
-                    std::move(last_expr.value())));
-            last_expr = {};
-          } else {
-            colapsed = std::make_unique<ConvertToRangeArrayExprAST>(
-                std::move(last_expr.value()));
-          }
-        }
-
         auto arg = parse_floating_arg(lexer_segments, cursor);
 
         if (!arg.has_value()) {
           RETURN_WITH_WARNING();
         }
 
-        last_expr = std::move(arg);
+        if (last_expr.has_value()) {
+          last_expr = std::make_unique<ConcatStringsAST>(
+              std::move(last_expr.value()), std::move(arg.value()));
+        } else {
+          last_expr = std::move(arg.value());
+        }
+
       } break;
       case TOK_AND:
         [[fallthrough]];
@@ -485,6 +498,8 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           } else {
             colapsed = std::make_unique<ConvertToRangeArrayExprAST>(
                 std::move(last_expr.value()));
+
+            last_expr = {};
           }
         }
         done = true;

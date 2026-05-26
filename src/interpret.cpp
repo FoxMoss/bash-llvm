@@ -63,20 +63,7 @@ void bash_interpret(std::string file_name, bool debug, bool sandbox) {
 
   state.module.get()->setDataLayout(jit->get()->data_layout);
 
-  llvm::FunctionType* entry_type =
-      llvm::FunctionType::get(llvm::Type::getVoidTy(*state.context), false);
-
-  state.entry = llvm::Function::Create(
-      entry_type, llvm::Function::ExternalLinkage, "main", state.module.get());
-
-  llvm::BasicBlock* entry_block =
-      llvm::BasicBlock::Create(*state.context, "entry", state.entry);
-  state.builder->SetInsertPoint(entry_block);
-
-  state.generate_variable_memory();
-  if (!runtime_push_output_stack(state, 0).has_value()) {
-    std::println("Error while pushing stack");
-  }
+  state.generate_entry();
 
   auto value = base.value()->codegen(state);
   if (!value.has_value()) {
@@ -84,13 +71,7 @@ void bash_interpret(std::string file_name, bool debug, bool sandbox) {
     return;
   }
 
-  if (!runtime_pop_output_stack(state).has_value()) {
-    std::println(stderr, "Error while popping stack");
-    return;
-    ;
-  }
-
-  state.builder->CreateRetVoid();
+  state.generate_exit(false);
 
   auto resource_tracker = jit->get()->main_jit_dylib.createResourceTracker();
   auto thread_safe_module = llvm::orc::ThreadSafeModule(

@@ -30,8 +30,11 @@ int main(int argc, char* argv[]) {
         ->required();
 
     std::string object_file = "out.o";
-    compile->add_option("-o", object_file, "Output file codegen")
+    compile->add_option("-o,--output", object_file, "Output file codegen")
         ->default_str("out.o");
+
+    std::optional<std::string> ir_file;
+    compile->add_option("--emit-ir", ir_file, "Output file for LLVM ir");
 
     OptimizationFlag opt_flag = OPT_O0;
     compile->add_flag("-O0{0},-O1{1},-O2{2},-O3{3},-Oz{4},-Os{5},", opt_flag,
@@ -41,7 +44,7 @@ int main(int argc, char* argv[]) {
 
     if (*compile) {
       if (!compile_bash(input_file, object_file, opt_flag, false, debug_general,
-                        sandbox_general)) {
+                        sandbox_general, ir_file)) {
         std::println(stderr, "Compile failed");
         return 1;
       }
