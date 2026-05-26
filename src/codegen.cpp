@@ -869,6 +869,9 @@ std::expected<llvm::Value*, std::string> RangeExprAST::codegen(
   for (int64_t i = min; i <= max; i += abs_step) {
     values_llvm.push_back(state.builder->CreateGlobalString(std::to_string(i)));
   }
+  if (values_llvm.size() > 256) {
+    return std::unexpected("Too many items in range");
+  }
 
   if (values_llvm.size() == 0) {
     return std::unexpected("Cannot make a range without items");

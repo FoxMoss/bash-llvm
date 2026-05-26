@@ -10,23 +10,25 @@ add_executable(llsh
  ../std/main.cpp
 )
 
-include(FetchContent)
 
-FetchContent_Declare(
-  CLI11 
-  GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-  GIT_TAG v2.6.2
-)
-FetchContent_MakeAvailable(CLI11)
-
-set(IC_BUILD_TESTS Off)
-FetchContent_Declare(
-  isocline
-  GIT_REPOSITORY https://github.com/daanx/isocline.git
-  GIT_TAG v1.1.0
+CPMAddPackage(
+  URI "gh:CLIUtils/CLI11@2.6.2"
 )
 
-FetchContent_MakeAvailable(isocline)
+CPMAddPackage(
+  URI "gh:daanx/isocline@1.1.0"
+  OPTIONS "IC_BUILD_TESTS Off"
+)
+
+
+# 22 or above needed!
+find_package(LLVM)
+
+if(${LLVM_VERSION} VERSION_LESS "22.1.5")
+  CPMAddPackage(
+    URI "gh:llvm/llvm-project#llvmorg-22.1.5"
+  )
+endif()
 
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 target_link_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
