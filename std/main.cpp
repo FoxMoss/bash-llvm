@@ -225,23 +225,27 @@ found_path:
     return;
   }
 
-  auto environ_data = colapse_enviroment(var_mem);
-  std::vector<char*> environ_cstr;
-  for (auto var : environ_data) {
-    environ_cstr.push_back((char*)var.c_str());
-  }
-  environ_cstr.push_back(nullptr);
-
   switch (
       var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
     case OutputFactor::OUTPUT_STDOUT: {
       pid_t output_id = fork();
       if (output_id == 0) {
+        auto environ_data = colapse_enviroment(var_mem);
+        std::vector<char*> environ_cstr;
+        for (auto var : environ_data) {
+          environ_cstr.push_back(strdup((char*)var.c_str()));
+        }
+        environ_cstr.push_back(nullptr);
+
         std::vector<char*> argv_vector;
         argv_vector.push_back((char*)extended_path->c_str());
         argv_vector.insert(argv_vector.end(), argv, argv + argc);
         argv_vector.push_back(nullptr);
         execve(extended_path->c_str(), argv_vector.data(), environ_cstr.data());
+
+        for (auto var : environ_cstr) {
+          free(var);
+        }
 
         return;
       }
@@ -254,6 +258,13 @@ found_path:
       pipe(link.data());
 
       if (fork() == 0) {
+        auto environ_data = colapse_enviroment(var_mem);
+        std::vector<char*> environ_cstr;
+        for (auto var : environ_data) {
+          environ_cstr.push_back(strdup((char*)var.c_str()));
+        }
+        environ_cstr.push_back(nullptr);
+
         dup2(link[1], STDOUT_FILENO);
         close(link[0]);
         close(link[1]);
@@ -264,6 +275,9 @@ found_path:
         argv_vector.push_back(nullptr);
         execve(extended_path->c_str(), argv_vector.data(), environ_cstr.data());
 
+        for (auto var : environ_cstr) {
+          free(var);
+        }
         return;
       }
       close(link[1]);

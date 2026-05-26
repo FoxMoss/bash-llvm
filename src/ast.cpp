@@ -513,20 +513,28 @@ std::optional<std::unique_ptr<ExprAST>> parse_call_expression(
     const std::vector<BashLexerSegment>& lexer_segments,
     size_t& cursor) noexcept {
   skip_whitespace(lexer_segments, cursor);
-  std::optional<BashLexerSegment> program_name =
-      get_current_segment(lexer_segments, cursor);
+  std::string program_name = "";
 
-  if (!program_name.has_value()) {
+  std::optional<BashLexerSegment> program_name_tok =
+      get_current_segment(lexer_segments, cursor);
+  while (program_name_tok.has_value() &&
+         (program_name_tok->token == TOK_VALUE ||
+          program_name_tok->token == TOK_SUB ||
+          program_name_tok->token == TOK_DEC)) {
+    program_name += program_name_tok->str;
+    program_name_tok = get_next_segment(lexer_segments, cursor);
+  }
+
+  if (program_name == "") {
     RETURN_WITH_WARNING();
   }
-  get_next_segment(lexer_segments, cursor);  // eat token
 
-  if (program_name->str != "expr") {
+  if (program_name != "expr") {
     auto args = parse_floating_expression(lexer_segments, cursor);
     if (!args.has_value()) {
-      return std::make_unique<CallExprAST>(program_name->str);
+      return std::make_unique<CallExprAST>(program_name);
     } else {
-      return std::make_unique<CallExprAST>(program_name->str,
+      return std::make_unique<CallExprAST>(program_name,
                                            std::move(args.value()));
     }
 
