@@ -1,4 +1,10 @@
+#include <tree_sitter/api.h>
+#include <tree_sitter/tree-sitter-bash.h>
+
+#include <algorithm>
+#include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <memory>
@@ -7,23 +13,66 @@
 
 #include "../std/main.h"
 #include "ast.h"
+#include "codegen.h"
 #include "isocline.h"
 #include "jit.h"
 #include "lexer.h"
+#include "treesitter.h"
 
+struct TSState {
+  TSParser* parser;
+  TSTree* tree;
+  TSQuery* query;
+};
+void* alloc_ts() {
+  auto* ret = (TSState*)malloc(sizeof(TSState));
+
+  ret->parser = ts_parser_new();
+  if (ret->parser == nullptr) {
+    return nullptr;
+  }
+
+  ts_parser_set_language(ret->parser, tree_sitter_bash());
+
+  static uint32_t error_offset;
+  static TSQueryError error_type;
+  ret->query =
+      ts_query_new(tree_sitter_bash(), highlighter_query.c_str(),
+                   highlighter_query.size(), &error_offset, &error_type);
+
+  if (ret->query == nullptr) {
+    std::println(stderr, "Tree Sitter failed at {} in query with error {}",
+                 error_offset, (int)error_type);
+    return nullptr;
+  }
+
+  ret->tree = nullptr;
+  return ret;
+}
+
+void free_ts(void* ts_state_raw) {
+  auto* ts_state = (TSState*)ts_state_raw;
+  ts_query_delete(ts_state->query);
+  if (ts_state->tree != nullptr) {
+    ts_tree_delete(ts_state->tree);
+  }
+  ts_parser_delete(ts_state->parser);
+  free(ts_state_raw);
+}
 static void completer(ic_completion_env_t* cenv, const char* prefix);
 
 static void highlighter(ic_highlight_env_t* henv, const char* input, void* arg);
 
 void bash_repl(bool debug, bool sandbox) {
   ic_style_def("kbd", "gray underline");
-  ic_style_def("ic-prompt", "ansi-maroon");
+  ic_style_def("ic-prompt", catppuccin_mocha_theme["lavender"].c_str());
   ic_set_prompt_marker("$ ", "> ");
 
   ic_set_history(nullptr, -1 /* default entries (= 200) */);
   ic_set_default_completer(&completer, nullptr);
 
-  ic_set_default_highlighter(highlighter, nullptr);
+  auto ts_state = alloc_ts();
+  ic_set_default_highlighter(highlighter, ts_state);
 
   ic_enable_auto_tab(true);
 
@@ -142,7 +191,7 @@ void bash_repl(bool debug, bool sandbox) {
     free(input);
   }
 
-  ic_println("done");
+  free_ts(ts_state);
 }
 
 static void completer(ic_completion_env_t* cenv, const char* input) {
@@ -151,6 +200,38 @@ static void completer(ic_completion_env_t* cenv, const char* input) {
 
 static void highlighter(ic_highlight_env_t* henv, const char* input,
                         void* arg) {
-  auto input_len = strlen(input);
-  ic_highlight(henv, 0, input_len, "white");
+  auto* ts_state = (TSState*)arg;
+  std::string full_str(input);
+
+  auto old_tree = ts_parser_parse_string(ts_state->parser, nullptr,
+                                         full_str.c_str(), full_str.size());
+
+  auto query_cursor = ts_query_cursor_new();
+  ts_query_cursor_exec(query_cursor, ts_state->query,
+                       ts_tree_root_node(old_tree));
+
+  TSQueryMatch match;
+  while (ts_query_cursor_next_match(query_cursor, &match)) {
+    for (size_t i = 0; i < match.capture_count; i++) {
+      uint32_t id_length;
+      const char* id_c_str = ts_query_capture_name_for_id(
+          ts_state->query, match.captures[i].index, &id_length);
+      std::string id_str(id_c_str,
+                         std::find(id_c_str, id_c_str + id_length, '.'));
+
+      std::optional<std::string> color;
+      if (query_to_theme.contains(id_str)) {
+        color = catppuccin_mocha_theme[query_to_theme[id_str]];
+      }
+
+      auto str_cursor = ts_node_start_byte(match.captures[i].node);
+      auto str_len = ts_node_end_byte(match.captures[i].node) - str_cursor;
+      if (color.has_value()) {
+        ic_highlight(henv, str_cursor, str_len, color.value().c_str());
+      }
+    }
+  }
+
+  ts_query_cursor_delete(query_cursor);
+  ts_tree_delete(old_tree);
 }

@@ -12,6 +12,14 @@ add_executable(llsh
 
 
 CPMAddPackage(
+  URI "gh:tree-sitter/tree-sitter@0.26.9"
+)
+
+CPMAddPackage(
+  URI "gh:tree-sitter/tree-sitter-bash@0.25.1"
+)
+
+CPMAddPackage(
   URI "gh:CLIUtils/CLI11@2.6.2"
 )
 
@@ -33,7 +41,7 @@ endif()
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 target_link_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 
-target_link_libraries(llsh LLVM-22 isocline CLI11::CLI11)
+target_link_libraries(llsh LLVM-22 isocline CLI11::CLI11 tree-sitter-bash tree-sitter)
 
 add_custom_command(TARGET llsh POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
