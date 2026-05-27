@@ -346,6 +346,17 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_arg(
       get_next_segment(lexer_segments, cursor);
       return val;
     } break;
+    case TOK_INJECT_MATH: {
+      // this eats the $(( and the ))
+      auto injected_str = parse_paren_math_expression(lexer_segments, cursor);
+      if (!injected_str.has_value()) {
+        RETURN_WITH_WARNING();
+      }
+
+      return std::make_unique<ConvertToStringExprAST>(
+          std::move(injected_str.value()));
+    } break;
+
     case TOK_INJECT_STR: {
       get_next_segment(lexer_segments, cursor);  // eat $(
       auto injected_str = parse_expression(lexer_segments, cursor);
@@ -400,11 +411,11 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           if (colapsed.has_value()) {
             colapsed = std::make_unique<ConcatExprAST>(
                 std::move(colapsed.value()),
-                std::make_unique<ConvertToRangeArrayExprAST>(
+                std::make_unique<ConvertToArrayExprAST>(
                     std::move(last_expr.value())));
             last_expr = {};
           } else {
-            colapsed = std::make_unique<ConvertToRangeArrayExprAST>(
+            colapsed = std::make_unique<ConvertToArrayExprAST>(
                 std::move(last_expr.value()));
             last_expr = {};
           }
@@ -420,11 +431,11 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           if (colapsed.has_value()) {
             colapsed = std::make_unique<ConcatExprAST>(
                 std::move(colapsed.value()),
-                std::make_unique<ConvertToRangeArrayExprAST>(
+                std::make_unique<ConvertToArrayExprAST>(
                     std::move(last_expr.value())));
             last_expr = {};
           } else {
-            colapsed = std::make_unique<ConvertToRangeArrayExprAST>(
+            colapsed = std::make_unique<ConvertToArrayExprAST>(
                 std::move(last_expr.value()));
             last_expr = {};
           }
@@ -492,11 +503,11 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
           if (colapsed.has_value()) {
             colapsed = std::make_unique<ConcatExprAST>(
                 std::move(colapsed.value()),
-                std::make_unique<ConvertToRangeArrayExprAST>(
+                std::make_unique<ConvertToArrayExprAST>(
                     std::move(last_expr.value())));
             last_expr = {};
           } else {
-            colapsed = std::make_unique<ConvertToRangeArrayExprAST>(
+            colapsed = std::make_unique<ConvertToArrayExprAST>(
                 std::move(last_expr.value()));
 
             last_expr = {};

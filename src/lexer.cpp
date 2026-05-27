@@ -103,6 +103,16 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     }
 
     if (token.starts_with("$")) {
+      if (next_char.has_value() && next_char == '(') {
+        current_char = read_char(source, cursor, token);
+
+        paren_map.level_counter++;
+        paren_map.relevant_indices.emplace_back(my_index,
+                                                paren_map.level_counter, true);
+        paren_map.level_map[paren_map.level_counter] = {my_index, true, 0};
+
+        return {BashLexerSegment(TOK_INJECT_STR, token)};
+      }
       return {
           BashLexerSegment(TOK_IDENTIFIER, token.substr(1, token.size() - 1))};
     } else {
@@ -394,6 +404,9 @@ std::vector<BashLexerSegment> paren_map_fusing(
         fused_ret.emplace_back(TOK_OPEN_PAREN_PAREN, "((");
       else if (inputs[index].token == TOK_CLOSE_PAREN)
         fused_ret.emplace_back(TOK_CLOSE_PAREN_PAREN, "))");
+      else if (inputs[index].token == TOK_INJECT_STR) {
+        fused_ret.emplace_back(TOK_INJECT_MATH, "$((");
+      }
       index++;
     } else {
       fused_ret.push_back(inputs[index]);

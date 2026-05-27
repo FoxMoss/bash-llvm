@@ -137,6 +137,16 @@ void bash_repl(bool debug, bool sandbox) {
     size_t ast_cursor = 0;
     auto base = parse_compound_expression(lexer_segments, ast_cursor, true);
 
+    if (!base.has_value()) {
+      free(input);
+
+      // kill it otherwise the jit gets very confused
+      state.module.reset();
+      state.init_llvm();
+      state.module->setDataLayout(jit->get()->data_layout);
+      continue;
+    }
+
     if (debug) {
       base.value()->print_name(0);
     }

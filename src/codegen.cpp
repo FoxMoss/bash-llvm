@@ -832,7 +832,16 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
   return val.value();
 }
 
-std::expected<llvm::Value*, std::string> ConvertToRangeArrayExprAST::codegen(
+std::expected<llvm::Value*, std::string> ConvertToStringExprAST::codegen(
+    CodegenState& state) {
+  auto val_val = val->codegen(state);
+  UNWRAP_EXPECTED(val_val)
+  auto val_str = cast_to_str(state, val_val.value());
+  UNWRAP_EXPECTED(val_str)
+  return val_str.value();
+}
+
+std::expected<llvm::Value*, std::string> ConvertToArrayExprAST::codegen(
     CodegenState& state) {
   auto val_val = val->codegen(state);
   UNWRAP_EXPECTED(val_val)

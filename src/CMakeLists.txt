@@ -28,20 +28,19 @@ CPMAddPackage(
   OPTIONS "IC_BUILD_TESTS Off"
 )
 
-
-# 22 or above needed!
+# 21 or above needed!
 find_package(LLVM)
 
-if(${LLVM_VERSION} VERSION_LESS "22.1.5")
+if((NOT DEFINED LLVM_VERSION) OR ("${LLVM_VERSION}" VERSION_LESS "21.1.8"))
   CPMAddPackage(
-    URI "gh:llvm/llvm-project#llvmorg-22.1.5"
+    URI "gh:llvm/llvm-project#llvmorg-21.1.8"
   )
 endif()
 
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 target_link_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 
-target_link_libraries(llsh LLVM-22 isocline CLI11::CLI11 tree-sitter-bash tree-sitter)
+target_link_libraries(llsh LLVM-${LLVM_VERSION_MAJOR} isocline CLI11::CLI11 tree-sitter-bash tree-sitter)
 
 add_custom_command(TARGET llsh POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy

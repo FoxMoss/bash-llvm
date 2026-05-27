@@ -9,6 +9,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
+
+option(BUILD_STATIC "Create a static binary" OFF)
+if(BUILD_STATIC)
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -static")
+endif()
+
 option(USE_CCACHE "Use ccache for compilation" OFF)
 set(CCACHE_PATH "ccache" CACHE STRING "Path to ccache binary")
 if(USE_CCACHE)
