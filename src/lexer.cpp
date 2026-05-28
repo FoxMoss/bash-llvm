@@ -328,16 +328,6 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
       return {BashLexerSegment(TOK_MINUS_EQ, token)};
     }
 
-    if (is_alpha_numeric(next_char.value())) {
-      std::optional<char> next_char = peek_char(source, cursor);
-      while (next_char.has_value() && is_alpha_numeric(next_char.value())) {
-        current_char = read_char(source, cursor, token);
-        next_char = peek_char(source, cursor);
-      }
-
-      return {BashLexerSegment(TOK_VALUE, token)};
-    }
-
     return {BashLexerSegment(TOK_SUB, token)};
   } else if (current_char == '+') {
     std::optional<char> next_char = peek_char(source, cursor);

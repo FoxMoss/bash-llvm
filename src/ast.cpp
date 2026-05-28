@@ -529,9 +529,9 @@ std::optional<std::unique_ptr<ExprAST>> parse_call_expression(
   std::optional<BashLexerSegment> program_name_tok =
       get_current_segment(lexer_segments, cursor);
   while (program_name_tok.has_value() &&
-         (program_name_tok->token == TOK_VALUE ||
-          program_name_tok->token == TOK_SUB ||
-          program_name_tok->token == TOK_DEC)) {
+         program_name_tok->token != TOK_WHITESPACE &&
+         program_name_tok->token != TOK_NEWLINE &&
+         program_name_tok->token != TOK_EOF) {
     program_name += program_name_tok->str;
     program_name_tok = get_next_segment(lexer_segments, cursor);
   }
@@ -850,24 +850,25 @@ std::optional<std::unique_ptr<ExprAST>> parse_condition_expression(
   skip_whitespace(lexer_segments, cursor);
   current_segment = get_current_segment(lexer_segments, cursor);
   switch (current_segment->token) {
-    case TOK_VALUE: {
-      if (!current_segment->str.starts_with("-")) {
+    case TOK_SUB: {
+      current_segment = get_next_segment(lexer_segments, cursor);
+      if (!current_segment.has_value()) {
         RETURN_WITH_WARNING()
       }
 
       ConditionExprAST::ConditonOperator op;
 
-      if (current_segment->str == "-eq") {
+      if (current_segment->str == "eq") {
         op = ConditionExprAST::CONDITION_EQ;
-      } else if (current_segment->str == "-ne") {
+      } else if (current_segment->str == "ne") {
         op = ConditionExprAST::CONDITION_NE;
-      } else if (current_segment->str == "-lt") {
+      } else if (current_segment->str == "lt") {
         op = ConditionExprAST::CONDITION_LT;
-      } else if (current_segment->str == "-le") {
+      } else if (current_segment->str == "le") {
         op = ConditionExprAST::CONDITION_LE;
-      } else if (current_segment->str == "-gt") {
+      } else if (current_segment->str == "gt") {
         op = ConditionExprAST::CONDITION_GT;
-      } else if (current_segment->str == "-ge") {
+      } else if (current_segment->str == "ge") {
         op = ConditionExprAST::CONDITION_GE;
       } else {
         RETURN_WITH_WARNING()
@@ -1189,6 +1190,12 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
 
         skip_whitespace(lexer_segments, cursor);
       } break;
+      case TOK_DIV:
+        [[fallthrough]];
+      case TOK_RANGE:
+        [[fallthrough]];
+      case TOK_DOT:
+        [[fallthrough]];
       case TOK_VALUE:
         [[fallthrough]];
       case TOK_IDENTIFIER: {

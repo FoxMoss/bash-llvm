@@ -190,39 +190,48 @@ void external_program(void* var_mem, char* path, uint64_t argc, char** argv) {
 
   auto var_mem_usable = (VariableMemory*)var_mem;
 
-  std::string path_key = "PATH";
-  auto path_var =
-      get_variable_memory(var_mem, path_key.c_str(), path_key.size());
-  auto path_var_len = strlen(path_var);
+  std::optional<std::string> extended_path;
+  std::string executable(path);
 
-  std::vector<std::filesystem::path> paths;
-  std::string glob;
-  for (size_t i = 0; i < path_var_len; i++) {
-    if (path_var[i] == ':' && !glob.empty()) {
-      auto glob_path = std::filesystem::path(glob);
-      glob.clear();
-      if (!std::filesystem::is_directory(glob_path)) {
+  if (!executable.starts_with(".")) {
+    std::string path_key = "PATH";
+    auto path_var =
+        get_variable_memory(var_mem, path_key.c_str(), path_key.size());
+    auto path_var_len = strlen(path_var);
+
+    std::vector<std::filesystem::path> paths;
+    std::string glob;
+    for (size_t i = 0; i < path_var_len; i++) {
+      if (path_var[i] == ':' && !glob.empty()) {
+        auto glob_path = std::filesystem::path(glob);
+        glob.clear();
+        if (!std::filesystem::is_directory(glob_path)) {
+          continue;
+        }
+
+        paths.emplace_back(glob_path);
         continue;
       }
-
-      paths.emplace_back(glob_path);
-      continue;
+      glob.push_back(path_var[i]);
     }
-    glob.push_back(path_var[i]);
-  }
-  if (glob.empty()) {
-    paths.emplace_back(glob);
-  }
+    if (glob.empty()) {
+      paths.emplace_back(glob);
+    }
+    paths.emplace_back("/");
 
-  std::optional<std::string> extended_path;
-  for (auto dir : paths) {
-    std::filesystem::directory_iterator dir_iter(dir);
-    for (auto dir_file : dir_iter) {
-      if (!dir_file.is_regular_file()) continue;
-      if (dir_file.path().filename() != path) continue;
-      extended_path = dir_file.path();
+    for (auto dir : paths) {
+      std::filesystem::path dir_file = dir / path;
+      if (!std::filesystem::exists(dir_file)) continue;
+      if (!std::filesystem::is_regular_file(dir_file)) continue;
+      extended_path = dir_file;
       goto found_path;
     }
+  } else {
+    std::filesystem::path local_path = std::filesystem::current_path() / path;
+    if (!std::filesystem::exists(local_path)) goto found_path;
+    if (!std::filesystem::is_regular_file(local_path)) goto found_path;
+
+    extended_path = local_path;
   }
 found_path:
 

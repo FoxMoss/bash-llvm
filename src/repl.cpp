@@ -68,7 +68,15 @@ void bash_repl(bool debug, bool sandbox) {
   ic_style_def("ic-prompt", catppuccin_mocha_theme["lavender"].c_str());
   ic_set_prompt_marker("$ ", "> ");
 
-  ic_set_history(nullptr, -1 /* default entries (= 200) */);
+  std::string home_path = "";
+  if(getenv("HOME") != nullptr){
+    home_path = getenv("HOME");
+  }
+  
+  std::filesystem::path history_path(".cache/llsh/history");
+  history_path = home_path /history_path;
+  std::filesystem::create_directories(history_path.parent_path());
+  ic_set_history(std::filesystem::absolute(history_path).c_str(), -1 /* default entries (= 200) */);
   ic_set_default_completer(&completer, nullptr);
 
   auto ts_state = alloc_ts();
