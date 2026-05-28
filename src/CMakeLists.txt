@@ -10,13 +10,17 @@ add_executable(llsh
  ../std/main.cpp
 )
 
+set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)
 
 CPMAddPackage(
   URI "gh:tree-sitter/tree-sitter@0.26.9"
+  OPTIONS "BUILD_SHARED_LIBS OFF"
 )
 
 CPMAddPackage(
   URI "gh:tree-sitter/tree-sitter-bash@0.25.1"
+  PATCHES "../tree-sitter-bash.patch"
+  OPTIONS "IGNORE_CLI ON" "BUILD_STATIC ON" "BUILD_SHARED_LIBS OFF"
 )
 
 CPMAddPackage(
@@ -25,22 +29,45 @@ CPMAddPackage(
 
 CPMAddPackage(
   URI "gh:daanx/isocline@1.1.0"
-  OPTIONS "IC_BUILD_TESTS Off"
+  PATCHES "../isocline.patch"
+  OPTIONS "IC_BUILD_TESTS OFF"
 )
 
-# 21 or above needed!
-find_package(LLVM)
-
-if((NOT DEFINED LLVM_VERSION) OR ("${LLVM_VERSION}" VERSION_LESS "21.1.8"))
-  CPMAddPackage(
-    URI "gh:llvm/llvm-project#llvmorg-21.1.8"
-  )
-endif()
+# 22 or above needed!
+find_package(LLVM REQUIRED)
 
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 target_link_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 
-target_link_libraries(llsh LLVM-${LLVM_VERSION_MAJOR} isocline CLI11::CLI11 tree-sitter-bash tree-sitter)
+list(APPEND LINKED_LIBRARIES isocline CLI11::CLI11 tree-sitter-bash tree-sitter)
+
+if(BUILD_STATIC)
+  include_directories(/usr/lib/llvm22/include/)
+  link_directories(/usr/lib/llvm22/lib/)
+
+  execute_process(
+    COMMAND llvm-config --libdir
+    OUTPUT_VARIABLE LLVM_LIB_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  execute_process(
+    COMMAND llvm-config --link-static --libnames all
+    OUTPUT_VARIABLE LLVM_LIB_NAMES OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  execute_process(
+    COMMAND llvm-config --system-libs --link-static
+    OUTPUT_VARIABLE LLVM_SYS_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  separate_arguments(LLVM_LIB_NAMES_LIST UNIX_COMMAND "${LLVM_LIB_NAMES}")
+  foreach(libname IN LISTS LLVM_LIB_NAMES_LIST)
+    list(APPEND LLVM_STATIC_LIBS "${LLVM_LIB_DIR}/${libname}")
+  endforeach()
+
+  list(APPEND LINKED_LIBRARIES ${LLVM_STATIC_LIBS} z zstd)
+else()
+  list(APPEND LINKED_LIBRARIES LLVM-22)
+endif()
+
+target_link_libraries(llsh ${LINKED_LIBRARIES})
 
 add_custom_command(TARGET llsh POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy

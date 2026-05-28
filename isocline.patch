@@ -1,0 +1,13 @@
+index c453046..1a2c641 100644
+--- a/src/term.c
++++ b/src/term.c
+@@ -23,9 +23,6 @@
+ #include <unistd.h>
+ #include <errno.h>
+ #include <sys/ioctl.h>
+-#if defined(__linux__)
+-#include <linux/kd.h>
+-#endif
+ #endif
+ 
+ #define IC_CSI      "\x1B["

@@ -12,7 +12,8 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
 option(BUILD_STATIC "Create a static binary" OFF)
 if(BUILD_STATIC)
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -static")
+  add_link_options(-static)
+  add_compile_options(-static)
 endif()
 
 option(USE_CCACHE "Use ccache for compilation" OFF)

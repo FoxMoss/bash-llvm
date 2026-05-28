@@ -54,6 +54,12 @@ void bash_cd(void* var_mem, uint64_t argc, char** argv) {
   const std::string pwd_key = "PWD";
   auto pwd_path =
       std::filesystem::absolute(std::filesystem::current_path() / argv[0]);
+
+  if (!std::filesystem::exists(pwd_path)) {
+    std::println(stderr, "llsh: cd: {} does not exist", pwd_path.string());
+    return;
+  }
+
   store_variable_memory(var_mem, pwd_key.c_str(), pwd_key.size(),
                         pwd_path.string().c_str(), pwd_path.string().size());
 
