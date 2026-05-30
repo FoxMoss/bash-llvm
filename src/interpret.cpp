@@ -5,7 +5,7 @@
 #include <print>
 #include <string>
 
-#include "ast.h"
+#include "ast/ast.h"
 #include "jit.h"
 #include "lexer.h"
 #include "main.h"

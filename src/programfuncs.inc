@@ -1,0 +1,4 @@
+PROG_SYMBOL(shopt)
+PROG_SYMBOL(echo)
+PROG_SYMBOL(printf)
+PROG_SYMBOL(cd)

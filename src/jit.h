@@ -64,6 +64,7 @@ class BashJIT {
 
     // clang-format off
     cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
+
         #include "symbols.inc"
     })));
 

@@ -1,10 +1,11 @@
 
 #include "codegen.h"
+#include "jit.h"
 
 void CodegenState::generate_standard_library() {
-  generate_prototype("echo");
-  generate_prototype("printf");
-  generate_prototype("cd");
+#define PROG_SYMBOL(symb) generate_prototype(#symb);
+#include "programfuncs.inc"
+#undef PROG_SYMBOL
 
   {
     std::vector<llvm::Type*> bash_func_args = {

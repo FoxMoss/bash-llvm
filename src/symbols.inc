@@ -1,6 +1,6 @@
-SYMBOL(bash_echo)
-SYMBOL(bash_printf)
-SYMBOL(bash_cd)
+#define PROG_SYMBOL(symb) SYMBOL(bash_##symb)
+#include "programfuncs.inc"
+#undef PROG_SYMBOL
 
 SYMBOL(str_to_float)
 SYMBOL(str_to_len)

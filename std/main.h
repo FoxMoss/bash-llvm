@@ -25,14 +25,17 @@ struct VariableMemory {
   std::map<std::string, std::string> memory;
   std::map<uint64_t, OutputFactor> output_stack;
   uint64_t stack_iterator;
+
+  std::map<std::string, bool> shell_options;
 };
 
 extern "C" {
-void bash_echo(void* var_mem, uint64_t argc, char** argv);
-void bash_printf(void* var_mem, uint64_t argc, char** argv);
-void bash_cd(void* var_mem, uint64_t argc, char** argv);
+int bash_shopt(void* var_mem, uint64_t argc, char** argv);
+int bash_echo(void* var_mem, uint64_t argc, char** argv);
+int bash_printf(void* var_mem, uint64_t argc, char** argv);
+int bash_cd(void* var_mem, uint64_t argc, char** argv);
 
-void external_program(void* var_mem, char* path, uint64_t argc, char** argv);
+int external_program(void* var_mem, char* path, uint64_t argc, char** argv);
 
 float str_to_float(char* str);
 size_t str_to_len(char* str);

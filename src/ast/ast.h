@@ -42,7 +42,7 @@ class StringExprAST : public ExprAST {
  public:
   std::string val;
 
-  StringExprAST(const std::string& val) : val(val) {}
+  StringExprAST(std::string  val) : val(std::move(val)) {}
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
       std::print(" ");
@@ -63,8 +63,8 @@ class CallExprAST : public ExprAST {
 
  public:
   CallExprAST(std::string program, std::unique_ptr<ExprAST> args)
-      : program(program), args(std::move(args)) {}
-  CallExprAST(std::string program) : program(program) {}
+      : program(std::move(program)), args(std::move(args)) {}
+  CallExprAST(std::string program) : program(std::move(program)) {}
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -85,7 +85,7 @@ class CallExprAST : public ExprAST {
 
 class UnknownExprAST : public ExprAST {
  public:
-  UnknownExprAST() {}
+  UnknownExprAST() = default;
 };
 
 class IdentifierExprAST : public ExprAST {
@@ -93,7 +93,7 @@ class IdentifierExprAST : public ExprAST {
   // name is public incase we need to do manipulation
   std::string name;
 
-  IdentifierExprAST(const std::string& name) : name(name) {}
+  IdentifierExprAST(std::string  name) : name(std::move(name)) {}
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -137,17 +137,7 @@ class StatementOpExprAST : public ExprAST {
   };
 #undef OP
 
-  static std::string get_op_name(StatementOp op) {
-#define OP(x) \
-  case x:     \
-    return #x;
-    switch (op) {
-#include "statementops.inc"
-    }
-#undef TOKEN
-    std::unreachable();
-  }
-
+  static std::string get_op_name(StatementOp op) ;
   StatementOpExprAST(StatementOp op, std::unique_ptr<ExprAST> first,
                      std::unique_ptr<ExprAST> second)
       : op(op), first(std::move(first)), second(std::move(second)) {}
@@ -321,9 +311,9 @@ class RangeExprAST : public ExprAST {
   int32_t step;
 
  public:
-  RangeExprAST(const std::string& first_value, const std::string& second_value,
+  RangeExprAST(std::string  first_value, std::string  second_value,
                const int32_t& step)
-      : first_value(first_value), second_value(second_value), step(step) {}
+      : first_value(std::move(first_value)), second_value(std::move(second_value)), step(step) {}
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -400,8 +390,7 @@ class CompoundExprAST : public ExprAST {
 
 class ForExprAST : public ExprAST {
  public:
-  ForExprAST() {}
-  virtual ~ForExprAST() {}
+  ForExprAST() = default;
   void virtual add_body(std::unique_ptr<ExprAST>) {}
 };
 
@@ -576,6 +565,56 @@ class WhileAST : public ExprAST {
       CodegenState& state) override;
 };
 
+class CaseConditionExprAST : public ExprAST {
+  std::unique_ptr<ExprAST> var;
+
+  std::vector<std::string> matches;
+
+ public:
+  CaseConditionExprAST(std::unique_ptr<ExprAST> var,
+                       std::vector<std::string> matches)
+      : var(std::move(var)), matches(std::move(matches)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("CaseConditionExprAST {}\n", matches);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
+class CaseExprAST : public ExprAST {
+  std::unique_ptr<ExprAST> var;
+  std::map<std::unique_ptr<ExprAST>, std::unique_ptr<ExprAST>> condtion_map;
+
+ public:
+  CaseExprAST(std::unique_ptr<ExprAST> var) : var(std::move(var)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("CaseExprAST\n");
+
+    for (auto& condition : condtion_map) {
+      condition.first->print_name(level + 1);
+      condition.second->print_name(level + 1);
+    }
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
 class ConcatStringsAST : public ExprAST {
   std::unique_ptr<ExprAST> str1;
   std::unique_ptr<ExprAST> str2;
@@ -607,7 +646,7 @@ class FunctionDefAST : public ExprAST {
 
  public:
   FunctionDefAST(std::string name, std::unique_ptr<ExprAST> body)
-      : name(name), body(std::move(body)) {}
+      : name(std::move(name)), body(std::move(body)) {}
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {

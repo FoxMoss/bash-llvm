@@ -12,7 +12,7 @@
 #include <string>
 
 #include "../std/main.h"
-#include "ast.h"
+#include "ast/ast.h"
 #include "codegen.h"
 #include "isocline.h"
 #include "jit.h"
@@ -69,14 +69,15 @@ void bash_repl(bool debug, bool sandbox) {
   ic_set_prompt_marker("$ ", "> ");
 
   std::string home_path = "";
-  if(getenv("HOME") != nullptr){
+  if (getenv("HOME") != nullptr) {
     home_path = getenv("HOME");
   }
-  
+
   std::filesystem::path history_path(".cache/llsh/history");
-  history_path = home_path /history_path;
+  history_path = home_path / history_path;
   std::filesystem::create_directories(history_path.parent_path());
-  ic_set_history(std::filesystem::absolute(history_path).c_str(), -1 /* default entries (= 200) */);
+  ic_set_history(std::filesystem::absolute(history_path).c_str(),
+                 -1 /* default entries (= 200) */);
   ic_set_default_completer(&completer, nullptr);
 
   auto ts_state = alloc_ts();

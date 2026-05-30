@@ -1,13 +1,33 @@
 add_executable(llsh
  main.cpp
  lexer.cpp
- ast.cpp
- codegen.cpp
  repl.cpp
  prototypes.cpp
  compiler.cpp
  interpret.cpp
+ ast/ast.cpp
+ ast/args.cpp
+ ast/helper.cpp
+ codegen/codegen.cpp
+ codegen/loops.cpp
+ codegen/helper.cpp
+ codegen/math.cpp
  ../std/main.cpp
+ ../std/programs.cpp
+)
+
+
+target_precompile_headers(llsh
+  PRIVATE
+  <llvm/ADT/ArrayRef.h>
+  <llvm/IR/BasicBlock.h>
+  <llvm/IR/Constant.h>
+  <llvm/IR/IRBuilder.h>
+  <llvm/IR/Intrinsics.h>
+  <llvm/IR/Value.h>
+  <llvm/Support/Alignment.h>
+  <llvm/Support/raw_ostream.h>
+  ast/ast.h
 )
 
 set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)
@@ -68,6 +88,7 @@ else()
 endif()
 
 target_link_libraries(llsh ${LINKED_LIBRARIES})
+target_include_directories(llsh PRIVATE .)
 
 add_custom_command(TARGET llsh POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy

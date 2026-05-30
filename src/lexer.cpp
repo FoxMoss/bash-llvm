@@ -185,8 +185,9 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
       if (current_char == '\\' && !escaping) {
         escaping = true;
       } else if (current_char == start_char && !escaping) {
-      } else if (current_char == 'n' && escaping) {
-        inner_text.push_back('\n');
+      } else if (escaping) {
+        inner_text.push_back('\\');
+        inner_text.push_back(current_char.value());
         escaping = false;
       } else {
         if (current_char == '$' && !escaping) {
@@ -194,7 +195,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
           inner_text.clear();
 
           auto next_char = peek_char(source, cursor);
-          if (next_char == '(') {
+          if (next_char.has_value() && next_char == '(') {
             current_char = read_char(source, cursor, token);
 
             auto real_index = my_index + ret.size();
@@ -224,7 +225,6 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
         } else {
           inner_text.push_back(current_char.value());
         }
-        escaping = false;  // we're done escaping
       }
     } while (!(current_char == start_char && !escaping));
     ret.emplace_back(TOK_VALUE, inner_text);
@@ -232,56 +232,56 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     return ret;
   } else if (current_char == '=') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '=') {  // ==
+    if (next_char.has_value() && next_char.value() == '=') {  // ==
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_EQ_EQ, token)};
     }
     return {BashLexerSegment(TOK_EQ, token)};
   } else if (current_char == '<') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '=') {  // <=
+    if (next_char.has_value() && next_char.value() == '=') {  // <=
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_LESS_EQ, token)};
     }
     return {BashLexerSegment(TOK_LESS, token)};
   } else if (current_char == '>') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '=') {  // >=
+    if (next_char.has_value() && next_char.value() == '=') {  // >=
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_GREATER_EQ, token)};
     }
     return {BashLexerSegment(TOK_GREATER, token)};
   } else if (current_char == '&') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '&') {  // &&
+    if (next_char.has_value() && next_char.value() == '&') {  // &&
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_AND_AND, token)};
     }
     return {BashLexerSegment(TOK_AND, token)};
   } else if (current_char == '!') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '=') {  // !=
+    if (next_char.has_value() && next_char.value() == '=') {  // !=
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_NOT_EQ, token)};
     }
     return {BashLexerSegment(TOK_BANG, token)};
   } else if (current_char == '|') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '|') {  // ||
+    if (next_char.has_value() && next_char.value() == '|') {  // ||
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_OR_OR, token)};
     }
     return {BashLexerSegment(TOK_OR, token)};
   } else if (current_char == '.') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '.') {  // ..
+    if (next_char.has_value() && next_char.value() == '.') {  // ..
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_RANGE, token)};
     }
     return {BashLexerSegment(TOK_DOT, token)};
   } else if (current_char == '(') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == ')') {  // ()
+    if (next_char.has_value() && next_char.value() == ')') {  // ()
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_FUNC_INDICATOR, token)};
     }
@@ -319,11 +319,11 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     return {BashLexerSegment(TOK_MOD, token)};
   } else if (current_char == '-') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '-') {  // --
+    if (next_char.has_value() && next_char.value() == '-') {  // --
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_DEC, token)};
     }
-    if (next_char.value() == '=') {  // -=
+    if (next_char.has_value() && next_char.value() == '=') {  // -=
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_MINUS_EQ, token)};
     }
@@ -331,11 +331,11 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     return {BashLexerSegment(TOK_SUB, token)};
   } else if (current_char == '+') {
     std::optional<char> next_char = peek_char(source, cursor);
-    if (next_char.value() == '+') {  // ++
+    if (next_char.has_value() && next_char.value() == '+') {  // ++
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_INC, token)};
     }
-    if (next_char.value() == '=') {  // +=
+    if (next_char.has_value() && next_char.value() == '=') {  // +=
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_PLUS_EQ, token)};
     }
@@ -350,6 +350,17 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     return {BashLexerSegment(TOK_SEMI_COLON, token)};
   } else if (current_char == '\n') {
     return {BashLexerSegment(TOK_NEWLINE, token)};
+  } else if (current_char == '~') {
+    return {BashLexerSegment(TOK_TILDE, token)};
+  } else if (current_char == '@') {
+    return {BashLexerSegment(TOK_AT, token)};
+  } else if (current_char == '\\') {
+    std::optional<char> next_char = peek_char(source, cursor);
+    if (next_char.has_value() && next_char.value() == '\n') {
+      current_char = read_char(source, cursor, token);
+      return {BashLexerSegment(TOK_WHITESPACE, token)};
+    }
+    return {BashLexerSegment(TOK_BACKSLASH, token)};
   }
 
   std::println(stderr, "Error: Unknown token: {}", token);
