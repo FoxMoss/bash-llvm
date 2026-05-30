@@ -38,8 +38,8 @@ struct ParenMap {
 class BashLexerSegment {
  public:
   BashLexerSegment(BashLexerToken token, std::string str)
-      : token(token), str(str) {}
-  ~BashLexerSegment() {}
+      : token(token), str(std::move(str)) {}
+  ~BashLexerSegment() = default;
 
   BashLexerToken token;
   std::string str;
@@ -50,10 +50,9 @@ class BashLexerSegment {
 
   MathOp get_math_op();
 
-  static std::vector<BashLexerSegment> munch_token(std::string& source,
-                                                   size_t& cursor,
-                                                   BashLexerToken prev_token,
-                                                   ParenMap& paren_map);
+  static std::vector<BashLexerSegment> munch_token(
+      std::string& source, size_t& cursor, BashLexerToken prev_token,
+      ParenMap& paren_map) noexcept;
 
  private:
 };

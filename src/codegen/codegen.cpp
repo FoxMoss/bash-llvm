@@ -1,6 +1,7 @@
 #include "codegen.h"
 
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/STLExtras.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constant.h>
 #include <llvm/IR/IRBuilder.h>
@@ -130,9 +131,8 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
   return state.builder->CreateCall(program_called, arg_values);
 }
 
-
-std::expected<llvm::Value *, std::string>
-StatementOpExprAST::codegen(CodegenState &state) {
+std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(
+    CodegenState& state) {
   llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
 
   auto left_full = first->codegen(state);
@@ -372,9 +372,8 @@ std::expected<llvm::Value*, std::string> ConvertToArrayExprAST::codegen(
       val_val.value(), uint64_t{0});
 }
 
-
-std::expected<llvm::Value *, std::string>
-RangeExprAST::codegen(CodegenState &state) {
+std::expected<llvm::Value*, std::string> RangeExprAST::codegen(
+    CodegenState& state) {
   std::vector<llvm::Constant*> values_llvm;
 
   int64_t first_value_parsed = 0;
@@ -611,13 +610,81 @@ std::expected<llvm::Value*, std::string> InjectIntoStringAST::codegen(
   return state.runtime_pop_output_stack();
 }
 
-std::expected<llvm::Value*, std::string> CaseConditionExprAST::codegen(
-    CodegenState& state) {
-  return std::unexpected("Not implemented");
-}
-
 std::expected<llvm::Value*, std::string> CaseExprAST::codegen(
     CodegenState& state) {
-  return std::unexpected("Not implemented");
+  auto var_gen = var->codegen(state);
+  UNWRAP_EXPECTED(var_gen);
+  auto var_str = cast_to_str(state, var_gen.value());
+  UNWRAP_EXPECTED(var_str);
+
+  llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
+
+  llvm::BasicBlock* merge_block =
+      llvm::BasicBlock::Create(*state.context, "esac");
+
+  size_t path_index = 0;
+  for (auto& path : condition_map) {
+    llvm::BasicBlock* next_case =
+        llvm::BasicBlock::Create(*state.context, "next_case");
+
+    std::vector<llvm::BasicBlock*> condition_blocks;
+
+    llvm::BasicBlock* activate =
+        llvm::BasicBlock::Create(*state.context, "activate");
+
+    size_t condition_index = 0;
+    for (auto& condition : path.first) {
+      llvm::BasicBlock* condition_block = llvm::BasicBlock::Create(
+          *state.context,
+          std::format("condition_{}_{}", path_index, condition_index));
+
+      state.builder->CreateBr(condition_block);
+
+      parent_func->insert(parent_func->end(), condition_block);
+      state.builder->SetInsertPoint(condition_block);
+
+      auto condition_gen = condition->codegen(state);
+      UNWRAP_EXPECTED(condition_gen)
+
+      auto condition_str = cast_to_str(state, condition_gen.value());
+      UNWRAP_EXPECTED(condition_str)
+
+      auto is_eq = runtime_strequals(state, var_str.value(),
+                                     condition_str.value(), true);
+      UNWRAP_EXPECTED(is_eq)
+
+      llvm::BasicBlock* next_condition =
+          llvm::BasicBlock::Create(*state.context, "next_condition");
+
+      state.builder->CreateCondBr(is_eq.value(), activate, next_condition);
+
+      parent_func->insert(parent_func->end(), next_condition);
+      state.builder->SetInsertPoint(next_condition);
+
+      condition_index++;
+    }
+
+    auto last_next_condition = state.builder->GetInsertBlock();
+
+    parent_func->insert(parent_func->end(), activate);
+    state.builder->SetInsertPoint(activate);
+    UNWRAP_EXPECTED(path.second->codegen(state));
+    state.builder->CreateBr(merge_block);
+
+    state.builder->SetInsertPoint(last_next_condition);
+
+    state.builder->CreateBr(next_case);
+
+    parent_func->insert(parent_func->end(), next_case);
+    state.builder->SetInsertPoint(next_case);
+    path_index++;
+  }
+
+  state.builder->CreateBr(merge_block);
+
+  parent_func->insert(parent_func->end(), merge_block);
+  state.builder->SetInsertPoint(merge_block);
+
+  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
 }
 

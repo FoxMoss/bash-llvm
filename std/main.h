@@ -40,8 +40,8 @@ int external_program(void* var_mem, char* path, uint64_t argc, char** argv);
 float str_to_float(char* str);
 size_t str_to_len(char* str);
 size_t int_len(int64_t i);
-
 void int_to_str(int64_t i, char* buf, size_t buf_len);
+bool strequals(void* var_mem, const char* a, const char* b, bool for_case);
 
 void* create_variable_memory(bool sandboxed);
 

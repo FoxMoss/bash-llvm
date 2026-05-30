@@ -1,6 +1,4 @@
 #include "ast.h"
-#include "helper.h"
-#include "args.h"
 
 #include <cassert>
 #include <cstdio>
@@ -8,9 +6,12 @@
 #include <memory>
 #include <optional>
 #include <print>
+#include <string>
 #include <utility>
 #include <vector>
 
+#include "args.h"
+#include "helper.h"
 #include "lexer.h"
 
 std::optional<std::unique_ptr<ExprAST>> parse_paren_expression(
@@ -523,17 +524,98 @@ std::optional<std::unique_ptr<ExprAST>> parse_assignment(
                                              std::move(value.value()));
 }
 
-
 std::optional<std::unique_ptr<ExprAST>> parse_case(
     const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) {
-
   auto current_segment = get_current_segment(lexer_segments, cursor);
-  auto var_tok = get_current_segment(lexer_segments, cursor);
   if (!current_segment.has_value() || current_segment->token != TOK_CASE) {
     RETURN_WITH_WARNING();
   }
   get_next_segment(lexer_segments, cursor);
 
+  skip_whitespace(lexer_segments, cursor);
+
+  auto var = parse_identifier_or_value(lexer_segments, cursor);
+  if (!var.has_value()) {
+    RETURN_WITH_WARNING()
+  }
+
+  skip_whitespace(lexer_segments, cursor);
+
+  std::vector<std::pair<std::vector<std::unique_ptr<ExprAST>>,
+                        std::unique_ptr<ExprAST>>>
+      condition_map;
+
+  current_segment = get_current_segment(lexer_segments, cursor);
+  if (!current_segment.has_value() || current_segment->token != TOK_IN) {
+    RETURN_WITH_WARNING();
+  }
+  get_next_segment(lexer_segments, cursor);
+  skip_whitespace_and_newline(lexer_segments, cursor);
+  current_segment = get_current_segment(lexer_segments, cursor);
+
+  while (current_segment.has_value() && current_segment->token != TOK_ESAC) {
+    skip_whitespace_and_newline(lexer_segments, cursor);
+
+    std::vector<std::unique_ptr<ExprAST>> options;
+
+    auto option = parse_identifier_or_value(lexer_segments, cursor);
+    if (!option.has_value()) {
+      RETURN_WITH_WARNING();
+    }
+
+    options.push_back(std::move(option.value()));
+
+    skip_whitespace(lexer_segments, cursor);
+
+    current_segment = get_current_segment(lexer_segments, cursor);
+    while (current_segment.has_value() &&
+           current_segment->token != TOK_CLOSE_PAREN) {
+      if (current_segment->token != TOK_OR) {
+        RETURN_WITH_WARNING();
+      }
+      current_segment = get_next_segment(lexer_segments, cursor);
+      skip_whitespace_and_newline(lexer_segments, cursor);
+
+      option = parse_identifier_or_value(lexer_segments, cursor);
+      if (!option.has_value()) {
+        RETURN_WITH_WARNING();
+      }
+
+      options.push_back(std::move(option.value()));
+      skip_whitespace(lexer_segments, cursor);
+      current_segment = get_current_segment(lexer_segments, cursor);
+    }
+
+    if (!current_segment.has_value() ||
+        current_segment->token != TOK_CLOSE_PAREN) {
+      RETURN_WITH_WARNING();
+    }
+
+    get_next_segment(lexer_segments, cursor);  // eat )
+
+    auto expr = parse_compound_expression(lexer_segments, cursor);
+    if (!expr.has_value()) {
+      RETURN_WITH_WARNING();
+    }
+
+    condition_map.emplace_back(std::move(options), std::move(expr.value()));
+
+    current_segment = get_current_segment(lexer_segments, cursor);
+    if (!current_segment.has_value() ||
+        current_segment->token != TOK_SEMI_SEMI) {
+      RETURN_WITH_WARNING();
+    }
+    get_next_segment(lexer_segments, cursor);
+    skip_whitespace_and_newline(lexer_segments, cursor);
+    current_segment = get_current_segment(lexer_segments, cursor);
+  }
+  if (!current_segment.has_value() || current_segment->token != TOK_ESAC) {
+    RETURN_WITH_WARNING();
+  }
+  get_next_segment(lexer_segments, cursor);  // eat esac
+
+  return std::make_unique<CaseExprAST>(std::move(var.value()),
+                                       std::move(condition_map));
 }
 
 std::optional<std::unique_ptr<ExprAST>> parse_compound_expression(
@@ -551,13 +633,13 @@ std::optional<std::unique_ptr<ExprAST>> parse_compound_expression(
     ret.push_back(std::move(value.value().value()));
     value = parse_expression(lexer_segments, cursor, top_level);
     if (!value.has_value()) {
+      std::print(stderr, "{}", value.error());
       RETURN_WITH_WARNING()
     }
   }
 
   return std::make_unique<CompoundExprAST>(std::move(ret));
 }
-
 
 std::expected<std::optional<std::unique_ptr<ExprAST>>, std::string>
 parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
@@ -596,6 +678,13 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
           UNEXPECTED_RETURN_WITH_WARNING();
         }
         return static_unique_pointer_cast<ExprAST>(std::move(for_expr.value()));
+      }
+      case TOK_CASE: {
+        auto case_expr = parse_case(lexer_segments, cursor);
+        if (!case_expr.has_value()) {
+          UNEXPECTED_RETURN_WITH_WARNING();
+        }
+        return case_expr;
       }
       case TOK_OPEN_PAREN: {
         return_expr = parse_paren_expression(lexer_segments, cursor);
@@ -711,6 +800,8 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
         [[fallthrough]];
       case TOK_CLOSE_CURLY:
         [[fallthrough]];
+      case TOK_SEMI_SEMI:
+        [[fallthrough]];
       case TOK_DONE:
         [[fallthrough]];
       case TOK_ELSE:
@@ -739,11 +830,6 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
         current_segment = get_next_segment(lexer_segments, cursor);
         break;
       default:
-        // cant start with this token
-        std::println("Last expression:");
-        if (last_expr.has_value()) {
-          last_expr->get()->print_name(0);
-        }
         UNEXPECTED_RETURN_WITH_MSG("Can't parse " +
                                    current_segment->get_token_name() + " " +
                                    current_segment->str);
@@ -767,8 +853,8 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
 }
 
 std::string StatementOpExprAST::get_op_name(StatementOp op) {
-#define OP(x)                                                                  \
-  case x:                                                                      \
+#define OP(x) \
+  case x:     \
     return #x;
   switch (op) {
 #include "statementops.inc"

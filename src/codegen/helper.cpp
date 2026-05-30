@@ -321,3 +321,25 @@ std::expected<llvm::Value*, std::string> reduce_to_bool(CodegenState& state,
 
   return std::unexpected("Couldn't reduce to bool");
 }
+
+std::expected<llvm::Value*, std::string> runtime_strequals(CodegenState& state,
+                                                           llvm::Value* a,
+                                                           llvm::Value* b,
+                                                           bool for_case) {
+  llvm::Function* program_called = state.module->getFunction("strequals");
+  if (!program_called) return std::unexpected("strequals not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 4)
+    return std::unexpected("Program strequals is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(), a, b,
+      llvm::ConstantInt::getBool(*state.context, for_case)};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}

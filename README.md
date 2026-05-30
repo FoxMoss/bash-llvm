@@ -1,6 +1,6 @@
 <h1 align="center"><img src="logo.png"></h1> <br />
-bash-llvm is a shell that vastly improves on GNU's bash implementation, being both 20 times faster
-and providing easy options for sandboxing shell scripts.
+`bash-llvm` is a AI first shell. Vastly improving the GNU implementation's performance and security, by rewriting the codebase from the ground up as a JIT.
+
 
 # Building
 

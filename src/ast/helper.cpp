@@ -1,4 +1,4 @@
-#include "ast.h"
+#include "helper.h"
 
 #include <cassert>
 #include <cstdio>
@@ -9,8 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "ast.h"
 #include "lexer.h"
-#include "helper.h"
 
 std::optional<BashLexerSegment> get_current_segment(
     const std::vector<BashLexerSegment>& lexer_segments, const size_t& cursor) {
@@ -91,12 +91,6 @@ std::optional<std::unique_ptr<ExprAST>> parse_value(
   std::optional<BashLexerSegment> current_segment;
   current_segment = get_current_segment(lexer_segments, cursor);
 
-  // skip whitespace
-  while (current_segment.has_value() &&
-         current_segment->token == TOK_WHITESPACE) {
-    current_segment = get_next_segment(lexer_segments, cursor);
-  }
-
   if (!current_segment.has_value()) {
     RETURN_WITH_WARNING();
   }
@@ -120,25 +114,27 @@ std::optional<std::unique_ptr<ExprAST>> parse_value(
     return std::move(*ret);
   } else if (current_segment->token == TOK_NEWLINE) {
     return std::make_unique<StringExprAST>("");
-  } else if (current_segment->token == TOK_OPEN_CURLY) {
-    auto tok = get_next_segment(lexer_segments, cursor);  // eat (
-    if (!tok.has_value() || tok.value().token != TOK_OPEN_PAREN) {
-      RETURN_WITH_WARNING();
-    }
+  } else if (current_segment->token == TOK_OPEN_PAREN) {
+    get_next_segment(lexer_segments, cursor);  // eat (
 
     auto value = parse_value(lexer_segments, cursor);
     if (!value.has_value()) {
       RETURN_WITH_WARNING();
     }
 
-    tok = get_next_segment(lexer_segments, cursor);  // eat )
+    auto tok = get_current_segment(lexer_segments, cursor);  // eat )
     if (!tok.has_value() || tok.value().token != TOK_CLOSE_PAREN) {
       RETURN_WITH_WARNING();
+    }
+    tok = get_next_segment(lexer_segments, cursor);
+
+    if (tok->token == TOK_WHITESPACE || tok->token == TOK_NEWLINE) {
+      return value;
     }
 
     auto after_value = parse_value(lexer_segments, cursor);
     if (!after_value.has_value()) {
-      return value;
+      RETURN_WITH_WARNING()
     }
 
     return std::make_unique<ConcatStringsAST>(

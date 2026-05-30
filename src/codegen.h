@@ -50,7 +50,7 @@ struct CodegenState {
         llvm::PointerType::get(*this->context, 0)};
 
     llvm::FunctionType* func_type = llvm::FunctionType::get(
-        llvm::Type::getVoidTy(*context), func_args, false);
+        llvm::Type::getInt32Ty(*context), func_args, false);
 
     llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                            std::format("bash_{}", name), module.get());

@@ -52,7 +52,7 @@ std::optional<char> peek_char(const std::string& source, size_t cursor) {
 
 std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     std::string& source, size_t& cursor, BashLexerToken prev_token,
-    ParenMap& paren_map) {
+    ParenMap& paren_map) noexcept {
   ssize_t my_index = paren_map.index_counter;
   std::string token = "";
 
@@ -99,7 +99,28 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
         return {BashLexerSegment(TOK_WHILE, token)};
       else if (token == "function")
         return {BashLexerSegment(TOK_FUNCTION, token)};
-      // TODO: finish the LUT
+      else if (token == "case") {
+        // this is a hack to not have to rewrite the paren fusing
+        // we just fake in some parens to keep the state happy and not fusing
+        paren_map.level_counter++;
+        paren_map.relevant_indices.emplace_back(my_index,
+                                                paren_map.level_counter, true);
+        paren_map.level_map[paren_map.level_counter] = {my_index, true, 0};
+
+        return {BashLexerSegment(TOK_CASE, token)};
+      } else if (token == "esac") {
+        paren_map.relevant_indices.emplace_back(my_index,
+                                                paren_map.level_counter, false);
+        if (paren_map.level_map.contains(paren_map.level_counter)) {
+          paren_map.close_map[std::get<0>(
+              paren_map.level_map[paren_map.level_counter].value())] = my_index;
+        }
+
+        paren_map.level_map[paren_map.level_counter] = {};
+        paren_map.level_counter--;
+
+        return {BashLexerSegment(TOK_ESAC, token)};
+      }
     }
 
     if (token.starts_with("$")) {
@@ -347,6 +368,17 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
   } else if (current_char == ',') {
     return {BashLexerSegment(TOK_COMMA, token)};
   } else if (current_char == ';') {
+    std::optional<char> next_char = peek_char(source, cursor);
+    if (next_char.has_value() && next_char.value() == ';') {  // ;;
+      current_char = read_char(source, cursor, token);
+      return {BashLexerSegment(TOK_SEMI_SEMI, token)};
+    }
+
+    paren_map.level_counter++;
+    paren_map.relevant_indices.emplace_back(my_index, paren_map.level_counter,
+                                            true);
+    paren_map.level_map[paren_map.level_counter] = {my_index, true, 0};
+
     return {BashLexerSegment(TOK_SEMI_COLON, token)};
   } else if (current_char == '\n') {
     return {BashLexerSegment(TOK_NEWLINE, token)};

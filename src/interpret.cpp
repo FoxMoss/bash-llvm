@@ -67,7 +67,7 @@ void bash_interpret(std::string file_name, bool debug, bool sandbox) {
 
   auto value = base.value()->codegen(state);
   if (!value.has_value()) {
-    std::print(stderr, "Error: {}", value.error());
+    std::print(stderr, "Error: {}\n", value.error());
     return;
   }
 

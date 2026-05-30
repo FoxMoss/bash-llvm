@@ -1,6 +1,6 @@
-last=(name)
+name=(last)
 echo $name
-last=(hello)val
+name=(hello)val
 echo $name
-last=()val
+name=()val
 echo $name

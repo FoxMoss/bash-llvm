@@ -6,6 +6,7 @@ SYMBOL(str_to_float)
 SYMBOL(str_to_len)
 SYMBOL(int_len)
 SYMBOL(int_to_str)
+SYMBOL(strequals)
 
 SYMBOL(create_variable_memory)
 SYMBOL(store_variable_memory)

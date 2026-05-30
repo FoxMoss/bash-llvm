@@ -27,7 +27,16 @@ target_precompile_headers(llsh
   <llvm/IR/Value.h>
   <llvm/Support/Alignment.h>
   <llvm/Support/raw_ostream.h>
+  <llvm/LinkAllPasses.h>
+  <llvm/Passes/CodeGenPassBuilder.h>
+  <llvm/Passes/PassBuilder.h>
+  <llvm/Passes/StandardInstrumentations.h>
+  <llvm/Support/ModRef.h>
+  <llvm/Support/TargetSelect.h>
+  <llvm/Transforms/Scalar/Reassociate.h>
+  <llvm/Transforms/Scalar/SimplifyCFG.h>
   ast/ast.h
+  codegen.h
 )
 
 set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)

@@ -210,6 +210,60 @@ void int_to_str(int64_t i, char* buf, size_t buf_len) {
   snprintf(buf, buf_len, "%ld", i);
 }
 
+bool strequals(void* var_mem, const char* a, const char* b, bool for_case) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "llsh: variable memory is null");
+    return false;
+  }
+
+  bool case_insensitive = true;
+
+  if (for_case) {
+    case_insensitive = get_shell_opt(var_mem, "nocasematch");
+  }
+
+  auto a_len = strlen(a);
+  auto b_len = strlen(b);
+
+  size_t a_cursor = 0;
+  size_t b_cursor = 0;
+
+  while (a_cursor < a_len && b_cursor < b_len) {
+    auto b_val = b[b_cursor];
+    if (case_insensitive && b_val >= 'A' && b_val <= 'Z') {
+      b_val += 'a' - 'A';  // everything to lowercase
+    }
+    char b_peek = 0;
+    if (b_cursor + 1 < b_len) {
+      b_peek = b[b_cursor + 1];
+    }
+    auto a_val = a[a_cursor];
+    if (case_insensitive && a_val >= 'A' && a_val <= 'Z') {
+      a_val += 'a' - 'A';
+    }
+
+    if (a_val == b_val) {
+      a_cursor++;
+      b_cursor++;
+      continue;
+    } else if (b_val == '*') {
+      a_cursor++;
+      if (b_peek == a_val) {
+        b_cursor += 2;  // skip the * and the char
+      }
+      continue;
+    }
+
+    return false;
+  }
+
+  if (a_cursor == a_len &&
+      (b_cursor == b_len || (b[b_cursor] == '*' && b_cursor == b_len - 1))) {
+    return true;
+  }
+  return false;
+}
+
 void* create_variable_memory(bool sandboxed) {
   static void* var_mem_cache = nullptr;
   if (var_mem_cache == nullptr) {

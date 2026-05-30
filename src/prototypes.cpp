@@ -31,6 +31,20 @@ void CodegenState::generate_standard_library() {
 
   {
     std::vector<llvm::Type*> bash_func_args = {
+        llvm::PointerType::get(*this->context, 0),
+        llvm::PointerType::get(*this->context, 0),
+        llvm::PointerType::get(*this->context, 0),
+        llvm::IntegerType::getInt1Ty(*context)};
+
+    llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+        llvm::Type::getInt1Ty(*context), bash_func_args, false);
+
+    llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                           "strequals", module.get());
+  }
+
+  {
+    std::vector<llvm::Type*> bash_func_args = {
         llvm::Type::getInt64Ty(*context)};
 
     llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
@@ -156,7 +170,7 @@ void CodegenState::generate_standard_library() {
         llvm::PointerType::get(*this->context, 0)};
 
     llvm::FunctionType* func_type = llvm::FunctionType::get(
-        llvm::Type::getVoidTy(*context), func_args, false);
+        llvm::Type::getInt32Ty(*context), func_args, false);
 
     llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                            "external_program", module.get());

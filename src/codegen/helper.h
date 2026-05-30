@@ -21,5 +21,9 @@ std::expected<llvm::Value*, std::string> cast_to_int(CodegenState& state,
                                                      llvm::Value* val);
 std::expected<llvm::Value*, std::string> runtime_strlen(CodegenState& state,
                                                         llvm::Value* val);
+std::expected<llvm::Value*, std::string> runtime_strequals(CodegenState& state,
+                                                           llvm::Value* a,
+                                                           llvm::Value* b,
+                                                           bool for_case);
 std::expected<llvm::Value*, std::string> get_variable_memory(
     CodegenState& state, std::string name);
