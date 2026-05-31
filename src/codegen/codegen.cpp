@@ -128,7 +128,9 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
                         llvm::PointerType::get(*state.context, 0))};
     }
   }
-  return state.builder->CreateCall(program_called, arg_values);
+  return state.builder->CreateICmpEQ(
+      state.builder->CreateCall(program_called, arg_values),
+      llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(*state.context), 0));
 }
 
 std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(

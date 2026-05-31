@@ -39,8 +39,6 @@ target_precompile_headers(llsh
   codegen.h
 )
 
-set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)
-
 CPMAddPackage(
   URI "gh:tree-sitter/tree-sitter@0.26.9"
   OPTIONS "BUILD_SHARED_LIBS OFF"

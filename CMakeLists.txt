@@ -36,6 +36,8 @@ if(USE_CCACHE)
 endif()
 
 include(cmake/CPM.cmake)
+set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)
+
 add_subdirectory(src)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)

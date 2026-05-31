@@ -370,14 +370,14 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
   } else if (current_char == ';') {
     std::optional<char> next_char = peek_char(source, cursor);
     if (next_char.has_value() && next_char.value() == ';') {  // ;;
+      paren_map.level_counter++;
+      paren_map.relevant_indices.emplace_back(my_index, paren_map.level_counter,
+                                              true);
+      paren_map.level_map[paren_map.level_counter] = {my_index, true, 0};
+
       current_char = read_char(source, cursor, token);
       return {BashLexerSegment(TOK_SEMI_SEMI, token)};
     }
-
-    paren_map.level_counter++;
-    paren_map.relevant_indices.emplace_back(my_index, paren_map.level_counter,
-                                            true);
-    paren_map.level_map[paren_map.level_counter] = {my_index, true, 0};
 
     return {BashLexerSegment(TOK_SEMI_COLON, token)};
   } else if (current_char == '\n') {
@@ -509,8 +509,7 @@ int16_t BashLexerSegment::get_token_precidence() {
       return 5;
 
     case TOK_DEC:
-      return 60;
-
+      [[fallthrough]];
     case TOK_INC:
       return 60;
 

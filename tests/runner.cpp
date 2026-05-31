@@ -1,7 +1,11 @@
 #include <unistd.h>
 
+#include <cstddef>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <print>
 
 int main(int argc, char* argv[]) {
@@ -24,6 +28,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  nlohmann::json successful_tests_json = nlohmann::json::object();
   size_t total_tests = 0;
   size_t successful_tests = 0;
 
@@ -86,10 +91,49 @@ int main(int argc, char* argv[]) {
     std::println("\e[1A{} {}",
                  success ? "\e[0;32mGOOD\e[0;37m" : "\e[0;31mNOPE\e[0;37m",
                  file.path().string());
+    if (success) {
+      successful_tests_json[file.path().string()] = true;
+    }
   }
 
   std::println("Coverage {}/{} or {:.2f}%", successful_tests, total_tests,
                (float)successful_tests / (float)total_tests * 100);
+
+  if (std::filesystem::exists("test_persistent.json")) {
+    std::ifstream test_persistent("test_persistent.json");
+    nlohmann::json last = nlohmann::json::parse(test_persistent);
+    test_persistent.close();
+    if (!last.is_object()) {
+      std::println(stderr, "error: test_persistent.json is not an object");
+      return 1;
+    }
+
+    std::println("\nRegressions:");
+
+    size_t regressed = 0;
+    for (nlohmann::json::iterator it = last.begin(); it != last.end(); ++it) {
+      if (!successful_tests_json.contains(it.key())) {
+        std::println("\e[0;31mREGRESSED\e[0;37m {}", it.key());
+        regressed++;
+      }
+    }
+    if (regressed == 0) {
+      std::println("\e[0;32mNo regressions :)\e[0;37m");
+    }
+
+    for (nlohmann::json::iterator it = successful_tests_json.begin();
+         it != successful_tests_json.end(); ++it) {
+      if (!last.contains(it.key())) {
+        last[it.key()] = true;
+      }
+    }
+
+    std::ofstream out_file("test_persistent.json");
+    out_file << last.dump();
+  } else {
+    std::ofstream out_file("test_persistent.json");
+    out_file << successful_tests_json.dump();
+  }
 
   return 0;
 }
