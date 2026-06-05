@@ -23,8 +23,8 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  if (!std::filesystem::is_regular_file("/usr/bin/bash")) {
-    std::println(stderr, "Error /usr/bin/bash does not exist.");
+  if (!std::filesystem::is_regular_file("/bin/bash")) {
+    std::println(stderr, "Error /bin/bash does not exist.");
     return 1;
   }
 
