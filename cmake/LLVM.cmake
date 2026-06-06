@@ -70,6 +70,53 @@ if((ZIG_ABI STREQUAL "gnu") OR (NOT ZIG_ABI))
   #link_directories(${edit2_SOURCE_DIR}/lib/x86_64-linux-gnu/)
   list(APPEND EXTERNAL_SOURCES ${edit2_SOURCE_DIR}/lib/x86_64-linux-gnu/libedit.so.2)
 
+  CPMAddPackage(
+    NAME xml2-deb 
+    URL http://security.debian.org/debian-security/pool/updates/main/libx/libxml2/libxml2_2.9.10+dfsg-6.7+deb11u9_amd64.deb) 
+  CPMAddPackage(
+    NAME xml2 
+    URL ${xml2-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${xml2_SOURCE_DIR}/lib/x86_64-linux-gnu/libxml2.so.2)
+
+  CPMAddPackage(
+    NAME icu-deb 
+    URL http://security.debian.org/debian-security/pool/updates/main/i/icu/libicu67_67.1-7+deb11u1_amd64.deb) 
+  CPMAddPackage(
+    NAME icu 
+    URL ${icu-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${icu_SOURCE_DIR}/lib/x86_64-linux-gnu/libicuuc.so.67)
+  list(APPEND EXTERNAL_SOURCES ${icu_SOURCE_DIR}/lib/x86_64-linux-gnu/libicudata.so.67)
+
+  CPMAddPackage(
+    NAME bsd-deb 
+    URL http://http.us.debian.org/debian/pool/main/libb/libbsd/libbsd0_0.11.3-1+deb11u1_amd64.deb) 
+  CPMAddPackage(
+    NAME bsd 
+    URL ${bsd-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${bsd_SOURCE_DIR}/lib/x86_64-linux-gnu/libbsd.so.0)
+
+  CPMAddPackage(
+    NAME md-deb 
+    URL http://http.us.debian.org/debian/pool/main/libm/libmd/libmd0_1.0.3-3_amd64.deb) 
+  CPMAddPackage(
+    NAME md 
+    URL ${md-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${md_SOURCE_DIR}/lib/x86_64-linux-gnu/libmd.so.0)
+
+  CPMAddPackage(
+    NAME tinfo6-deb 
+    URL http://http.us.debian.org/debian/pool/main/n/ncurses/libtinfo6_6.4-4_amd64.deb) 
+  CPMAddPackage(
+    NAME tinfo6 
+    URL ${tinfo6-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${tinfo6_SOURCE_DIR}/lib/x86_64-linux-gnu/libtinfo.so.6)
+
+
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/lib/")
   foreach(SOFILE ${EXTERNAL_SOURCES})
     get_filename_component(SOFILE_BARE ${SOFILE} NAME)

@@ -1,7 +1,12 @@
 CPMAddPackage(
   URI "gh:tree-sitter/tree-sitter@0.26.9"
   OPTIONS "BUILD_SHARED_LIBS OFF"
+  GIT_SUBMODULES_RECURSE OFF
 )
+
+include_directories(${tree-sitter_SOURCE_DIR}/lib/include/)
+message(${tree-sitter_SOURCE_DIR}/lib/include/)
+
 
 CPMAddPackage(
   URI "gh:tree-sitter/tree-sitter-bash@0.25.1"

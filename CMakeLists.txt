@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(bash-llvm)
 
@@ -23,6 +24,14 @@ if(USE_CCACHE)
     endif()
 endif()
 
+option(GNU_STD "Use libstdc++" OFF)
+
+if(GNU_STD)
+  add_compile_options(-stdlib=libstdc++)
+  add_link_options(-stdlib=libstdc++)
+endif()
+
+option(TRIPPLET "Compile target" "x86_64-linux-gnu")
 
 include(cmake/CPM.cmake)
 set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)

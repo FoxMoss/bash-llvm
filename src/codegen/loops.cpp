@@ -55,7 +55,7 @@ std::expected<llvm::Value*, std::string> CStyleForExprAST::codegen(
   parent_func->insert(parent_func->end(), merge);
   state.builder->SetInsertPoint(merge);
 
-  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+  return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
 std::expected<llvm::Value*, std::string> ForInExprAST::codegen(
@@ -130,7 +130,7 @@ std::expected<llvm::Value*, std::string> ForInExprAST::codegen(
   parent_func->insert(parent_func->end(), merge);
   state.builder->SetInsertPoint(merge);
 
-  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+  return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
 std::expected<llvm::Value*, std::string> WhileAST::codegen(
@@ -171,7 +171,7 @@ std::expected<llvm::Value*, std::string> WhileAST::codegen(
 
   state.builder->SetInsertPoint(merge_block);
 
-  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+  return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 std::expected<llvm::Value*, std::string> ConditionExprAST::codegen(
     CodegenState& state) {

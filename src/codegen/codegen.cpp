@@ -472,7 +472,7 @@ std::expected<llvm::Value*, std::string> ConcatStringsAST::codegen(
 std::expected<llvm::Value*, std::string> CompoundExprAST::codegen(
     CodegenState& state) {
   if (exprs.size() == 0) {
-    return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+    return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
   } else if (exprs.size() == 1) {
     return exprs.front()->codegen(state);
   }
@@ -539,7 +539,7 @@ std::expected<llvm::Value*, std::string> FunctionDefAST::codegen(
   state.named_values = named_values;
   state.builder->SetInsertPoint(return_block);
 
-  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+  return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
 std::expected<llvm::Value*, std::string> IfAST::codegen(CodegenState& state) {
@@ -599,7 +599,7 @@ std::expected<llvm::Value*, std::string> IfAST::codegen(CodegenState& state) {
     state.builder->SetInsertPoint(merge_block);
   }
 
-  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+  return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
 std::expected<llvm::Value*, std::string> InjectIntoStringAST::codegen(
@@ -687,6 +687,6 @@ std::expected<llvm::Value*, std::string> CaseExprAST::codegen(
   parent_func->insert(parent_func->end(), merge_block);
   state.builder->SetInsertPoint(merge_block);
 
-  return llvm::Constant::getNullValue(llvm::Type::getVoidTy(*state.context));
+  return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
