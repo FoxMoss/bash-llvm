@@ -1,1 +1,1 @@
-shopt -us nocasematch && echo "hi"
+echo "hi" && echo "hi"

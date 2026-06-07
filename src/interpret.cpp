@@ -58,7 +58,7 @@ void bash_interpret(std::string file_name, bool debug, bool sandbox) {
 
   auto jit = BashJIT::create(sandbox);
   if (!jit.has_value()) {
-    std::println(stderr, "Couldn't make JIT: {}", jit.error());
+    std::println(stderr, "jit: {}", jit.error());
   }
 
   state.module.get()->setDataLayout(jit->get()->data_layout);
@@ -67,7 +67,7 @@ void bash_interpret(std::string file_name, bool debug, bool sandbox) {
 
   auto value = base.value()->codegen(state);
   if (!value.has_value()) {
-    std::print(stderr, "Error: {}\n", value.error());
+    std::print(stderr, "error: {}\n", value.error());
     return;
   }
 
@@ -79,13 +79,13 @@ void bash_interpret(std::string file_name, bool debug, bool sandbox) {
   auto added_module =
       jit->get()->add_module(std::move(thread_safe_module), resource_tracker);
   if (!added_module.has_value()) {
-    std::print(stderr, "Failed to add module");
+    std::print(stderr, "jit: failed to add module");
     return;
   }
 
   auto expr_symbol = jit->get()->lookup("main");
   if (!expr_symbol.has_value()) {
-    std::print(stderr, "Failed to find expr");
+    std::println(stderr, "jit: failed to find expr");
     return;
   }
 
@@ -95,6 +95,6 @@ void bash_interpret(std::string file_name, bool debug, bool sandbox) {
   auto err = resource_tracker->remove();
 
   if (err) {
-    std::println(stderr, "Couldn't free resource_tracker.");
+    std::println(stderr, "jit: couldn't free resource_tracker.");
   }
 }

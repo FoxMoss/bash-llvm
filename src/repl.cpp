@@ -92,7 +92,7 @@ void bash_repl(bool debug, bool sandbox) {
   state.module.get()->setDataLayout(jit->get()->data_layout);
 
   if (!jit.has_value()) {
-    std::println(stderr, "Couldn't make JIT: {}", jit.error());
+    std::println(stderr, "jit: {}", jit.error());
   }
 
   auto resource_tracker = jit->get()->main_jit_dylib.createResourceTracker();
@@ -184,13 +184,13 @@ void bash_repl(bool debug, bool sandbox) {
     auto added_module =
         jit->get()->add_module(std::move(thread_safe_module), resource_tracker);
     if (!added_module.has_value()) {
-      std::println(stderr, "Failed to make module");
+      std::println(stderr, "jit: failed to make module");
       return;
     }
 
     auto expr_symbol = jit->get()->lookup("main");
     if (!expr_symbol.has_value()) {
-      std::println(stderr, "Failed to find expr");
+      std::println(stderr, "jit: failed to find expr");
       return;
     }
 
@@ -200,7 +200,7 @@ void bash_repl(bool debug, bool sandbox) {
     auto err = resource_tracker->remove();
 
     if (err) {
-      std::println(stderr, "Couldn't free resource_tracker.");
+      std::println(stderr, "jit: couldn't free resource_tracker.");
     }
 
     state.init_llvm();

@@ -31,7 +31,7 @@ if(GNU_STD)
   add_link_options(-stdlib=libstdc++)
 endif()
 
-option(TRIPPLET "Compile target" "x86_64-linux-gnu")
+option(TRIPLET "Compile target" "x86_64-linux-gnu")
 
 include(cmake/CPM.cmake)
 set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)

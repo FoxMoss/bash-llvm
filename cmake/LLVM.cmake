@@ -17,7 +17,7 @@ endif()
 
 
 
-if((ZIG_ABI STREQUAL "gnu") OR (NOT ZIG_ABI))
+if(TRIPLET STREQUAL "x86_64-linux-gnu")
   CPMAddPackage(
       NAME LLVM-deb
       URL https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-22/libllvm22_22.1.7~%2B%2B20260522062526%2B81c69e140401-1~exp1~20260522182547.83_amd64.deb)
@@ -138,21 +138,39 @@ if((ZIG_ABI STREQUAL "gnu") OR (NOT ZIG_ABI))
 
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
 
-elseif(ZIG_ABI STREQUAL "musl")
-  CPMAddPackage(
-      NAME LLVM
-      URL https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64/llvm22-libs-22.1.3-r0.apk)
+elseif(TRIPLET STREQUAL "x86_64-linux-musl")
+  find_package(LLVM REQUIRED)
 
-  CPMAddPackage(
-      NAME LLVM-dev
-      URL https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64/llvm22-dev-22.1.3-r0.apk)
+execute_process(
+    COMMAND llvm-config --libdir
+    OUTPUT_VARIABLE LLVM_LIB_DIR OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-  CPMAddPackage(
-      NAME musl
-      URL https://dl-cdn.alpinelinux.org/alpine/edge/main/x86_64/musl-1.2.6-r2.apk)
+  execute_process(
+    COMMAND llvm-config --link-static --libnames all
+    OUTPUT_VARIABLE LLVM_LIB_NAMES OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+  execute_process(
+    COMMAND llvm-config --system-libs --link-static
+    OUTPUT_VARIABLE LLVM_SYS_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
 
-  link_directories(${LLVM_SOURCE_DIR}/usr/lib/)
-  link_directories(${musl_SOURCE_DIR}/lib/)
-  include_directories(${LLVM-dev_SOURCE_DIR}/usr/lib/llvm22/include/)
+  separate_arguments(LLVM_LIB_NAMES_LIST UNIX_COMMAND "${LLVM_LIB_NAMES}")
+  foreach(libname IN LISTS LLVM_LIB_NAMES_LIST)
+    list(APPEND LLVM_STATIC_LIBS "${LLVM_LIB_DIR}/${libname}")
+  endforeach()
+
+  separate_arguments(LLVM_SYS_LIBS_LIST UNIX_COMMAND "${LLVM_SYS_LIBS}")
+
+  add_compile_definitions(NDEBUG)
+
+  list(APPEND REL_EXTERNAL_SOURCES  
+    -Wl,--start-group ${LLVM_STATIC_LIBS} -Wl,--end-group
+    ${LLVM_SYS_LIBS_LIST}
+  )
+
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+  set(BUILD_SHARED_LIBS OFF)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+
+  include_directories(/usr/include/llvm22/)
+
 endif()

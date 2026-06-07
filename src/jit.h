@@ -49,18 +49,24 @@ class BashJIT {
                           std::move(jit_target_builder))),
         data_layout(std::move(data_layout)),
         main_jit_dylib(this->execution_session->createBareJITDylib("<main>")) {
-    main_jit_dylib.addGenerator(
-        cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
-            data_layout.getGlobalPrefix())));
+    auto bundled_generator =
+        llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
+            data_layout.getGlobalPrefix());
+    if (bundled_generator.takeError()) {
+      std::println(stderr, "jit: cannot find process library");
+    } else {
+      main_jit_dylib.addGenerator(cantFail(std::move(bundled_generator)));
+    }
 
     if (jit_target_builder.getTargetTriple().isOSBinFormatCOFF()) {
       object_layer.setOverrideObjectFlagsWithResponsibilityFlags(true);
       object_layer.setAutoClaimResponsibilityForObjectSymbols(true);
     }
 
-#define SYMBOL(symb) \
-  {mangle(#symb),    \
-   {llvm::orc::ExecutorAddr::fromPtr(&symb), llvm::JITSymbolFlags::Exported}},
+#define SYMBOL(symb)                           \
+  {mangle(#symb),                              \
+   {llvm::orc::ExecutorAddr::fromPtr(&(symb)), \
+    llvm::JITSymbolFlags::Exported}},
 
     // clang-format off
     cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
