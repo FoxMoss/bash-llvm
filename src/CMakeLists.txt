@@ -25,6 +25,10 @@ CPMAddPackage(
 )
 
 
+if(TRIPLET STREQUAL "x86_64-linux-musl")
+  list(APPEND BONUS_SOURCES "../std/main.cpp" "../std/programs.cpp")
+endif()
+
 add_executable(llsh
  main.cpp
  lexer.cpp
@@ -32,6 +36,7 @@ add_executable(llsh
  prototypes.cpp
  compiler.cpp
  interpret.cpp
+ whereami.cpp
  ast/ast.cpp
  ast/args.cpp
  ast/helper.cpp
@@ -39,8 +44,7 @@ add_executable(llsh
  codegen/loops.cpp
  codegen/helper.cpp
  codegen/math.cpp
- ../std/main.cpp
- ../std/programs.cpp
+ ${BONUS_SOURCES}
 )
 
 if(NOT ZIG_TARGET)

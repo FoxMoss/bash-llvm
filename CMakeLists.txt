@@ -27,7 +27,6 @@ endif()
 option(GNU_STD "Use libstdc++" OFF)
 
 if(GNU_STD)
-  add_compile_options(-stdlib=libstdc++)
   add_link_options(-stdlib=libstdc++)
 endif()
 
@@ -37,6 +36,7 @@ include(cmake/CPM.cmake)
 set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)
 
 include(cmake/LLVM.cmake)
+add_subdirectory(std)
 
 add_subdirectory(src)
 

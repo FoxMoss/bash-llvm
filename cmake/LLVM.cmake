@@ -137,6 +137,7 @@ if(TRIPLET STREQUAL "x86_64-linux-gnu")
   install(FILES ${EXTERNAL_SOURCES} DESTINATION lib)
 
   set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+  set(BUILD_SHARED_LIBS ON)
 
 elseif(TRIPLET STREQUAL "x86_64-linux-musl")
   find_package(LLVM REQUIRED)

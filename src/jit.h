@@ -16,11 +16,14 @@
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/LLVMContext.h>
 
+#include <array>
 #include <expected>
+#include <filesystem>
 #include <memory>
 #include <print>
 
 #include "../std/main.h"
+#include "whereami.h"
 
 // based on
 // https://github.com/llvm/llvm-project/blob/main/llvm/examples/Kaleidoscope/include/KaleidoscopeJIT.h
@@ -53,7 +56,21 @@ class BashJIT {
         llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
             data_layout.getGlobalPrefix());
     if (bundled_generator.takeError()) {
-      std::println(stderr, "jit: cannot find process library");
+      std::array<char, 1024> executable_path;
+      int dirname_length = 0;
+      wai_getExecutablePath(executable_path.data(), executable_path.size(),
+                            &dirname_length);
+      std::string library = std::filesystem::absolute(
+          std::filesystem::path(executable_path.data()).parent_path() /
+          "../lib/libstdllsh.so");
+      auto generator = llvm::orc::StaticLibraryDefinitionGenerator::Load(
+          object_layer, library.c_str());
+
+      if (bundled_generator.takeError()) {
+        std::println(stderr, "jit: cannot use library {}", library);
+      } else {
+        main_jit_dylib.addGenerator(cantFail(std::move(generator)));
+      }
     } else {
       main_jit_dylib.addGenerator(cantFail(std::move(bundled_generator)));
     }
@@ -132,4 +149,3 @@ class BashJIT {
     return std::unexpected("Failed to lookup");
   }
 };
-
