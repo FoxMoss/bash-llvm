@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <memory>
 #include <print>
+#include <vector>
 
 #include "../std/main.h"
 #include "whereami.h"
@@ -56,49 +57,51 @@ class BashJIT {
         llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(
             data_layout.getGlobalPrefix());
     if (bundled_generator.takeError()) {
-      std::array<char, 1024> executable_path;
-      int dirname_length = 0;
-      wai_getExecutablePath(executable_path.data(), executable_path.size(),
-                            &dirname_length);
-      std::string library = std::filesystem::absolute(
-          std::filesystem::path(executable_path.data()).parent_path() /
-          "../lib/libstdllsh.so");
-      auto generator = llvm::orc::StaticLibraryDefinitionGenerator::Load(
-          object_layer, library.c_str());
+#define SYMBOL(symb) \
+  {mangle(#symb), {llvm::orc::ExecutorAddr::fromPtr(&(symb)), {}}},
 
-      if (bundled_generator.takeError()) {
-        std::println(stderr, "jit: cannot use library {}", library);
-      } else {
-        main_jit_dylib.addGenerator(cantFail(std::move(generator)));
-      }
+      // clang-format off
+          cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
+              #include "symbols.inc"
+          })));
+
+          if (!sandbox) {
+            cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
+              SYMBOL(external_program)
+            })));
+          }
+
+      // clang-format on
+#undef SYMBOL
+
     } else {
       main_jit_dylib.addGenerator(cantFail(std::move(bundled_generator)));
-    }
-
-    if (jit_target_builder.getTargetTriple().isOSBinFormatCOFF()) {
-      object_layer.setOverrideObjectFlagsWithResponsibilityFlags(true);
-      object_layer.setAutoClaimResponsibilityForObjectSymbols(true);
-    }
 
 #define SYMBOL(symb)                           \
   {mangle(#symb),                              \
    {llvm::orc::ExecutorAddr::fromPtr(&(symb)), \
     llvm::JITSymbolFlags::Exported}},
 
-    // clang-format off
-    cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
-
-        #include "symbols.inc"
-    })));
-
-    if (!sandbox) {
+      // clang-format off
       cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
-        SYMBOL(external_program)
+
+          #include "symbols.inc"
       })));
+
+      if (!sandbox) {
+        cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
+          SYMBOL(external_program)
+        })));
+      }
+
+      // clang-format on
+#undef SYMBOL
     }
 
-    // clang-format on
-#undef SYMBOL
+    if (jit_target_builder.getTargetTriple().isOSBinFormatCOFF()) {
+      object_layer.setOverrideObjectFlagsWithResponsibilityFlags(true);
+      object_layer.setAutoClaimResponsibilityForObjectSymbols(true);
+    }
   }
 
   ~BashJIT() {

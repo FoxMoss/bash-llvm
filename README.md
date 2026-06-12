@@ -1,18 +1,32 @@
-<h1 align="center"><img src="logo.png"></h1> <br />
-BASH-LLVM is as shell built for use in LLM harnesses. We vastly improve the GNU implementation's performance and security, by rewriting the codebase from the ground up as a LLVM frontend. BASH-LLVM has an about a 20x runtime speed improvement over GNU BASH even at this early point in development.
+![](logo.png)
+
+`bash-llvm` is Bash implementation built for modern age. Built from the ground up with security and performance in mind.
+
+`bash-llvm` has an about a 20x runtime speed improvement over GNU Bash, with a 4x improvement as a JIT.
+
+# Installing
+
+If you would like the quick easy way out to install BASH-LLVM on Linux, run the installer
+```sh
+bash -c "$(COLUMNS=50 curl https://raw.githubusercontent.com/FoxMoss/llsh-installer/refs/heads/main/install.sh -#)"
+```
+
+Code is fully auditable at [llsh-installer](https://github.com/FoxMoss/llsh-installer).
 
 # Building
 
 Requirements:
 - **CMake** 3.5 or above
 - **A C & C++ compiler** C++23 support needed 
-- **Ninja or Make** I use Ninja 1.13.2, and the instructions will assume you have ninja
-- **patch** I use GNU patch 2.8
+- **Ninja** or make if you know how to use it
+- **patch**
 - **git**
+
+All other dependencies are handled by CMake and CPM, and fetched in at build time.
 
 These should be relatively easy to find on Arch Linux and Alpine Linux (edge repos) 
 
-```
+```sh
 mkdir -p build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release -GNinja

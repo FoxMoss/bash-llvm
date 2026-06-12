@@ -5,9 +5,10 @@ add_library(stdllsh
   programs.cpp
 )
 
-install(TARGETS stdllsh DESTINATION lib)
 
-if(TRIPLET STREQUAL "x86_64-linux-gnu")
-  list(APPEND REL_EXTERNAL_SOURCES stdllsh)
+if(TRIPLET STREQUAL "x86_64-linux-musl")
+  target_compile_options(stdllsh PUBLIC -static)
+  target_link_options(stdllsh PUBLIC -static -static-libstdc++ -static-libgcc)
 endif()
 
+install(TARGETS stdllsh DESTINATION lib)
