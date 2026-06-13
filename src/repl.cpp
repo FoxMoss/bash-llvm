@@ -10,6 +10,7 @@
 #include <memory>
 #include <print>
 #include <string>
+#include <unistd.h>
 
 #include "../std/main.h"
 #include "ast/ast.h"
