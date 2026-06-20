@@ -29,6 +29,13 @@ struct VariableMemory {
   std::map<std::string, bool> shell_options;
 };
 
+struct SandboxingOptions {
+  bool block_external_programs = false;
+  bool run_in_root_sanbox = false;
+
+  bool any_features() { return run_in_root_sanbox | block_external_programs; }
+};
+
 extern "C" {
 int bash_shopt(void* var_mem, uint64_t argc, char** argv);
 int bash_echo(void* var_mem, uint64_t argc, char** argv);
@@ -43,7 +50,7 @@ size_t int_len(int64_t i);
 void int_to_str(int64_t i, char* buf, size_t buf_len);
 bool strequals(void* var_mem, const char* a, const char* b, bool for_case);
 
-void* create_variable_memory(bool sandboxed);
+void* create_variable_memory(void* sandboxed);
 
 void store_variable_memory(void* var_mem, const char* key_str, size_t key_len,
                            const char* val_str, size_t val_len);

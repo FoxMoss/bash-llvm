@@ -31,25 +31,25 @@ std::optional<std::unique_ptr<ExprAST>> parse_identifier_or_value(
 
 #define RETURN_WITH_WARNING()                                                 \
   auto loc = std::source_location::current();                                 \
-  std::print(stderr, "Error: {}:{}:{}\nin {}\n", loc.file_name(), loc.line(), \
+  std::print(stderr, "error: {}:{}:{}\nin {}\n", loc.file_name(), loc.line(), \
              loc.column(), loc.function_name());                              \
   return {};
 
 #define UNEXPECTED_RETURN_WITH_WARNING()                          \
   auto loc = std::source_location::current();                     \
-  return std::unexpected(std::format("Error: {}:{}:{}\nin {}\n",  \
+  return std::unexpected(std::format("error: {}:{}:{}\nin {}\n",  \
                                      loc.file_name(), loc.line(), \
                                      loc.column(), loc.function_name()));
 
 #define RETURN_WITH_MSG(msg)                                          \
   auto loc = std::source_location::current();                         \
-  std::print(stderr, "Error: {}:{}:{}\nin {}\n{}\n", loc.file_name(), \
+  std::print(stderr, "error: {}:{}:{}\nin {}\n{}\n", loc.file_name(), \
              loc.line(), loc.column(), loc.function_name(), msg);     \
   return {};
 
 #define UNEXPECTED_RETURN_WITH_MSG(msg)                              \
   auto loc = std::source_location::current();                        \
-  return std::unexpected(std::format("Error: {}:{}:{}\nin {}\n{}\n", \
+  return std::unexpected(std::format("error: {}:{}:{}\nin {}\n{}\n", \
                                      loc.file_name(), loc.line(),    \
                                      loc.column(), loc.function_name(), msg));
 

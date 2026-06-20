@@ -7,7 +7,7 @@ project(bash-llvm)
 set(CMAKE_CXX_SCAN_FOR_MODULES 0)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-#set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=null")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
 
 option(USE_CCACHE "Use ccache for compilation" OFF)
@@ -43,6 +43,5 @@ add_subdirectory(src)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_subdirectory(tests)
 endif()
-
 
 include(cmake/CPack.cmake)

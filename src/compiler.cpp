@@ -34,7 +34,7 @@ std::optional<File> File::open(std::string_view file_name) {
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
                                 OptimizationFlag opt_flag, bool debug_lexer,
-                                bool debug_ast, bool sandbox,
+                                bool debug_ast, SandboxingOptions sandboxing,
                                 std::optional<std::string> ir_file) {
   bool print_lexed = debug_lexer;
   bool print_ast = debug_ast;
@@ -74,20 +74,20 @@ std::optional<File> File::open(std::string_view file_name) {
   }
 
   if (!base.has_value()) {
-    std::print(stderr, "Error while parsing\n");
+    std::print(stderr, "error while parsing\n");
     return false;
   }
 
   auto function_prototypes = base->get()->get_functions_defined();
   CodegenState state(function_prototypes, false);
-  state.is_sandboxed = sandbox;
+  state.sandboxing = sandboxing;
 
   auto target_triple = llvm::Triple(sys::getDefaultTargetTriple());
 
   std::string error;
   auto target = TargetRegistry::lookupTarget(target_triple, error);
   if (!target) {
-    std::println(stderr, "Error could not get target triple");
+    std::println(stderr, "error could not get target triple");
     return false;
   }
 
@@ -104,7 +104,7 @@ std::optional<File> File::open(std::string_view file_name) {
 
     auto value = base.value()->codegen(state);
     if (!value.has_value()) {
-      std::print(stderr, "Error: {}\n", value.error());
+      std::print(stderr, "error: {}\n", value.error());
       return false;
     }
 
@@ -146,14 +146,14 @@ std::optional<File> File::open(std::string_view file_name) {
   llvm::raw_fd_ostream out_file(filename_out, error_code);
 
   if (error_code) {
-    std::println(stderr, "Error opening output file");
+    std::println(stderr, "error opening output file");
     return false;
   }
 
   llvm::legacy::PassManager object_passes;
   if (target_machine->addPassesToEmitFile(object_passes, out_file, nullptr,
                                           llvm::CodeGenFileType::ObjectFile)) {
-    std::println(stderr, "Target machine can't output object file");
+    std::println(stderr, "target machine can't output object file");
     return true;
   }
 

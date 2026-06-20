@@ -3,6 +3,7 @@
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constant.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Instructions.h>
@@ -24,6 +25,8 @@
 #include <memory>
 #include <print>
 
+#include "../std/main.h"
+
 struct CodegenState {
   std::unique_ptr<llvm::LLVMContext> context;
   std::unique_ptr<llvm::IRBuilder<>> builder;
@@ -41,7 +44,7 @@ struct CodegenState {
   llvm::Function* entry;
 
   bool is_jit = false;
-  bool is_sandboxed = false;
+  SandboxingOptions sandboxing;
 
   void generate_prototype(std::string name) {
     std::vector<llvm::Type*> func_args = {
@@ -72,8 +75,11 @@ struct CodegenState {
       return;
     }
 
+    // TODO: replace the null ptr here with a seralized SandboxingOptions object
+    // and implement into the build
     auto var_mem = builder->CreateCall(
-        program_called, {llvm::ConstantInt::getBool(*context, is_sandboxed)});
+        program_called,
+        {llvm::ConstantPointerNull::get(llvm::PointerType::get(*context, 0))});
 
     named_values["variable_memory"] = var_mem;
   }

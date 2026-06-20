@@ -395,7 +395,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
     return {BashLexerSegment(TOK_BACKSLASH, token)};
   }
 
-  std::println(stderr, "Error: Unknown token: {}", token);
+  std::println(stderr, "error: unknown token: {}", token);
   return {BashLexerSegment(TOK_UNK, token)};
 }
 

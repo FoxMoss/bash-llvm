@@ -1,5 +1,6 @@
 #include <tree_sitter/api.h>
 #include <tree_sitter/tree-sitter-bash.h>
+#include <unistd.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -10,7 +11,6 @@
 #include <memory>
 #include <print>
 #include <string>
-#include <unistd.h>
 
 #include "../std/main.h"
 #include "ast/ast.h"
@@ -18,6 +18,7 @@
 #include "isocline.h"
 #include "jit.h"
 #include "lexer.h"
+#include "main.h"
 #include "treesitter.h"
 
 struct TSState {
@@ -64,7 +65,7 @@ static void completer(ic_completion_env_t* cenv, const char* prefix);
 
 static void highlighter(ic_highlight_env_t* henv, const char* input, void* arg);
 
-void bash_repl(bool debug, bool sandbox) {
+void bash_repl(bool debug, SandboxingOptions sandboxing) {
   ic_style_def("kbd", "gray underline");
   ic_style_def("ic-prompt", catppuccin_mocha_theme["lavender"].c_str());
   ic_set_prompt_marker("$ ", "> ");
@@ -87,9 +88,9 @@ void bash_repl(bool debug, bool sandbox) {
   ic_enable_auto_tab(true);
 
   auto state = CodegenState({}, true);
-  state.is_sandboxed = sandbox;
+  state.sandboxing = sandboxing;
 
-  auto jit = BashJIT::create(sandbox);
+  auto jit = BashJIT::create(sandboxing);
   state.module.get()->setDataLayout(jit->get()->data_layout);
 
   if (!jit.has_value()) {
@@ -108,7 +109,7 @@ void bash_repl(bool debug, bool sandbox) {
   state.init_llvm();
   state.module->setDataLayout(jit->get()->data_layout);
 
-  auto* var_mem = (VariableMemory*)create_variable_memory(sandbox);
+  auto* var_mem = (VariableMemory*)create_variable_memory((void*)&sandboxing);
 
   std::string pwd_key = "PWD";
   std::string path = std::filesystem::current_path();
@@ -165,7 +166,7 @@ void bash_repl(bool debug, bool sandbox) {
 
     auto value = base.value()->codegen(state);
     if (!value.has_value()) {
-      std::print(stderr, "Error: {}\n", value.error());
+      std::print(stderr, "error: {}\n", value.error());
 
       free(input);
 

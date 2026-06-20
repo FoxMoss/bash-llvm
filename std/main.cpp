@@ -264,12 +264,17 @@ bool strequals(void* var_mem, const char* a, const char* b, bool for_case) {
   return false;
 }
 
-void* create_variable_memory(bool sandboxed) {
+void* create_variable_memory(void* sandboxing_raw) {
+  SandboxingOptions sandboxing;
+  if (sandboxing_raw != nullptr) {
+    sandboxing = *(SandboxingOptions*)sandboxing_raw;
+  }
+
   static void* var_mem_cache = nullptr;
   if (var_mem_cache == nullptr) {
     var_mem_cache = new VariableMemory;
 
-    if (!sandboxed) {
+    if (!sandboxing.block_external_programs) {
       size_t environ_cursor = 0;
       while (environ[environ_cursor] != nullptr) {
         std::string line = environ[environ_cursor];

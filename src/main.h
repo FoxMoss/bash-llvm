@@ -2,6 +2,8 @@
 #include <optional>
 #include <string>
 
+#include "../std/main.h"
+
 enum OptimizationFlag {
   OPT_O0 = 0,
   OPT_O1 = 1,
@@ -14,11 +16,12 @@ enum OptimizationFlag {
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
                                 OptimizationFlag opt_flag, bool debug_lexer,
-                                bool debug_ast, bool sandbox,
+                                bool debug_ast, SandboxingOptions sandboxing,
                                 std::optional<std::string> ir_file);
-void bash_repl(bool debug, bool sandbox);
+void bash_repl(bool debug, SandboxingOptions sandboxing);
 
-void bash_interpret(std::string file_name, bool debug, bool sandbox);
+void bash_interpret(std::string file_name, bool debug,
+                    SandboxingOptions sandboxing);
 
 struct File {
   [[nodiscard]] const std::string& contents() const noexcept;

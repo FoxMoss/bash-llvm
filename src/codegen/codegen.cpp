@@ -46,8 +46,8 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
     CodegenState& state) {
   llvm::Function* program_called =
       state.module->getFunction(std::format("bash_{}", program));
-  if (state.is_sandboxed && program_called == nullptr)
-    return std::unexpected("Unknown function referenced");
+  if (state.sandboxing.block_external_programs && program_called == nullptr)
+    return std::unexpected("unknown function referenced");
 
   bool external_program = false;
   if (program_called == nullptr) {

@@ -10,7 +10,8 @@
 #include "lexer.h"
 #include "main.h"
 
-void bash_interpret(std::string file_name, bool debug, bool sandbox) {
+void bash_interpret(std::string file_name, bool debug,
+                    SandboxingOptions sandboxing) {
   auto source_file = File::open(file_name);
   if (!source_file.has_value()) {
     std::println(stderr, "Error {} does not exist.", file_name);
@@ -54,9 +55,9 @@ void bash_interpret(std::string file_name, bool debug, bool sandbox) {
   }
 
   auto state = CodegenState(base.value()->get_functions_defined(), true);
-  state.is_sandboxed = sandbox;
+  state.sandboxing = sandboxing;
 
-  auto jit = BashJIT::create(sandbox);
+  auto jit = BashJIT::create(sandboxing);
   if (!jit.has_value()) {
     std::println(stderr, "jit: {}", jit.error());
   }

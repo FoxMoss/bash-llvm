@@ -19,6 +19,13 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
+  URI "gh:FoxMoss/belladonna#349d8d6"
+  OPTIONS "CMAKE_CXX_FLAGS ${FUSE_INCLUDE} -O3 -DFUSE_USE_VERSION=317"
+  "CMAKE_C_FLAGS ${FUSE_INCLUDE} -O3 -DFUSE_USE_VERSION=317"
+
+)
+
+CPMAddPackage(
   URI "gh:daanx/isocline@1.1.0"
   PATCHES "../isocline.patch"
   OPTIONS "IC_BUILD_TESTS OFF"
@@ -71,7 +78,7 @@ endif()
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 target_link_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 
-list(APPEND LINKED_LIBRARIES isocline CLI11::CLI11 tree-sitter-bash tree-sitter ${REL_EXTERNAL_SOURCES})
+list(APPEND LINKED_LIBRARIES isocline CLI11::CLI11 tree-sitter-bash tree-sitter ${REL_EXTERNAL_SOURCES} belladonna)
 
 target_link_libraries(llsh ${LINKED_LIBRARIES})
 target_include_directories(llsh PRIVATE .)

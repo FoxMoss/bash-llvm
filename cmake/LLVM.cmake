@@ -117,6 +117,26 @@ if(TRIPLET STREQUAL "x86_64-linux-gnu")
   list(APPEND EXTERNAL_SOURCES ${tinfo6_SOURCE_DIR}/lib/x86_64-linux-gnu/libtinfo.so.6)
 
 
+  CPMAddPackage(
+    NAME fuse-deb 
+    URL http://http.us.debian.org/debian/pool/main/f/fuse3/libfuse3-3_3.14.0-4_amd64.deb)
+  CPMAddPackage(
+    NAME fuse 
+    URL ${fuse-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${fuse_SOURCE_DIR}/lib/x86_64-linux-gnu/libfuse3.so.3)
+
+  CPMAddPackage(
+    NAME fuse-dev-deb 
+    URL http://http.us.debian.org/debian/pool/main/f/fuse3/libfuse3-dev_3.14.0-4_amd64.deb)
+  CPMAddPackage(
+    NAME fuse-dev 
+    URL ${fuse-dev-deb_SOURCE_DIR}/data.tar.xz)
+
+  include_directories(${fuse-dev_SOURCE_DIR}/include/fuse3/)
+  set(FUSE_INCLUDE "-I${fuse-dev_SOURCE_DIR}/include/fuse3/")
+
+
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/lib/")
   foreach(SOFILE ${EXTERNAL_SOURCES})
     get_filename_component(SOFILE_BARE ${SOFILE} NAME)

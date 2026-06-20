@@ -68,7 +68,8 @@ void CodegenState::generate_standard_library() {
   }
 
   {
-    std::vector<llvm::Type*> bash_func_args = {llvm::Type::getInt1Ty(*context)};
+    std::vector<llvm::Type*> bash_func_args = {
+        llvm::PointerType::get(*context, 0)};
 
     llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
         llvm::PointerType::get(*this->context, 0), bash_func_args, false);
@@ -162,7 +163,7 @@ void CodegenState::generate_standard_library() {
         ->setMemoryEffects(llvm::MemoryEffects::unknown());
   }
 
-  if (!is_sandboxed) {
+  if (!sandboxing.block_external_programs) {
     std::vector<llvm::Type*> func_args = {
         llvm::PointerType::get(*this->context, 0),
         llvm::PointerType::get(*this->context, 0),

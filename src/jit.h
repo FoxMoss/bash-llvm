@@ -41,7 +41,7 @@ class BashJIT {
 
   BashJIT(std::unique_ptr<llvm::orc::ExecutionSession> execution_session,
           llvm::orc::JITTargetMachineBuilder jit_target_builder,
-          llvm::DataLayout data_layout, bool sandbox)
+          llvm::DataLayout data_layout, SandboxingOptions sandbox)
       : execution_session(std::move(execution_session)),
         mangle(*this->execution_session, this->data_layout),
         object_layer(*this->execution_session,
@@ -65,7 +65,7 @@ class BashJIT {
               #include "symbols.inc"
           })));
 
-          if (!sandbox) {
+          if (!sandbox.block_external_programs) {
             cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
               SYMBOL(external_program)
             })));
@@ -88,7 +88,7 @@ class BashJIT {
           #include "symbols.inc"
       })));
 
-      if (!sandbox) {
+      if (!sandbox.block_external_programs) {
         cantFail(main_jit_dylib.define(llvm::orc::absoluteSymbols({
           SYMBOL(external_program)
         })));
@@ -110,7 +110,7 @@ class BashJIT {
   }
 
   static std::expected<std::unique_ptr<BashJIT>, std::string> create(
-      bool sandbox) {
+      SandboxingOptions sandbox) {
     auto executor_process = llvm::orc::SelfExecutorProcessControl::Create();
     if (!executor_process)
       return std::unexpected("Failed to make SelfExecutorProcessControl");
