@@ -19,7 +19,7 @@ CPMAddPackage(
 )
 
 CPMAddPackage(
-  URI "gh:FoxMoss/belladonna#349d8d6"
+  URI "gh:FoxMoss/belladonna#b4ac652"
   OPTIONS "CMAKE_CXX_FLAGS ${FUSE_INCLUDE} -O3 -DFUSE_USE_VERSION=317"
   "CMAKE_C_FLAGS ${FUSE_INCLUDE} -O3 -DFUSE_USE_VERSION=317"
 
@@ -90,3 +90,6 @@ add_custom_command(TARGET llsh POST_BUILD
     COMMENT "Add clangd to the base directory")
 
 install(TARGETS llsh DESTINATION bin)
+
+install(TARGETS belladonna DESTINATION lib)
+

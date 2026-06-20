@@ -20,7 +20,7 @@ endif()
 if(TRIPLET STREQUAL "x86_64-linux-gnu")
   CPMAddPackage(
       NAME LLVM-deb
-      URL https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-22/libllvm22_22.1.7~%2B%2B20260522062526%2B81c69e140401-1~exp1~20260522182547.83_amd64.deb)
+      URL https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-22/libllvm22_22.1.8~%2B%2B20260613092316%2Be80beda6e255-1~exp1~20260613092335.86_amd64.deb)
   CPMAddPackage(
       NAME LLVM
       URL ${LLVM-deb_SOURCE_DIR}/data.tar.xz)
@@ -30,7 +30,7 @@ if(TRIPLET STREQUAL "x86_64-linux-gnu")
 
     CPMAddPackage(
       NAME LLVM-dev-deb
-      URL https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-22/llvm-22-dev_22.1.7~%2B%2B20260522062526%2B81c69e140401-1~exp1~20260522182547.83_amd64.deb)
+      URL https://apt.llvm.org/bullseye/pool/main/l/llvm-toolchain-22/llvm-22-dev_22.1.8~%2B%2B20260613092316%2Be80beda6e255-1~exp1~20260613092335.86_amd64.deb)
     CPMAddPackage(
       NAME LLVM-dev
       URL ${LLVM-dev-deb_SOURCE_DIR}/data.tar.xz)
@@ -72,7 +72,7 @@ if(TRIPLET STREQUAL "x86_64-linux-gnu")
 
   CPMAddPackage(
     NAME xml2-deb 
-    URL http://security.debian.org/debian-security/pool/updates/main/libx/libxml2/libxml2_2.9.10+dfsg-6.7+deb11u9_amd64.deb) 
+    URL https://security.debian.org/debian-security/pool/updates/main/libx/libxml2/libxml2_2.9.10+dfsg-6.7+deb11u10_amd64.deb) 
   CPMAddPackage(
     NAME xml2 
     URL ${xml2-deb_SOURCE_DIR}/data.tar.xz)
@@ -116,6 +116,32 @@ if(TRIPLET STREQUAL "x86_64-linux-gnu")
 
   list(APPEND EXTERNAL_SOURCES ${tinfo6_SOURCE_DIR}/lib/x86_64-linux-gnu/libtinfo.so.6)
 
+  CPMAddPackage(
+    NAME zlib1g-deb 
+    URL http://http.us.debian.org/debian/pool/main/z/zlib/zlib1g_1.2.13.dfsg-1_amd64.deb)
+  CPMAddPackage(
+    NAME zlib1g 
+    URL ${zlib1g-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${zlib1g_SOURCE_DIR}/lib/x86_64-linux-gnu/libz.so.1)
+
+  CPMAddPackage(
+    NAME zstd-deb 
+    URL http://http.us.debian.org/debian/pool/main/libz/libzstd/libzstd1_1.5.4+dfsg2-5_amd64.deb)
+  CPMAddPackage(
+    NAME zstd 
+    URL ${zstd-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${zstd_SOURCE_DIR}/lib/x86_64-linux-gnu/libzstd.so.1)
+
+  CPMAddPackage(
+    NAME lzma-deb 
+    URL http://http.us.debian.org/debian/pool/main/x/xz-utils/liblzma5_5.4.1-1_amd64.deb)
+  CPMAddPackage(
+    NAME lzma 
+    URL ${lzma-deb_SOURCE_DIR}/data.tar.xz)
+
+  list(APPEND EXTERNAL_SOURCES ${lzma_SOURCE_DIR}/lib/x86_64-linux-gnu/liblzma.so.5)
 
   CPMAddPackage(
     NAME fuse-deb 
@@ -180,6 +206,14 @@ execute_process(
   endforeach()
 
   separate_arguments(LLVM_SYS_LIBS_LIST UNIX_COMMAND "${LLVM_SYS_LIBS}")
+
+  find_package(PkgConfig REQUIRED)
+
+  pkg_check_modules(FUSE REQUIRED fuse3)
+
+  include_directories(${FUSE_INCLUDE_DIRS})
+  add_compile_options(${FUSE_CFLAGS_OTHER})
+  link_libraries(${FUSE_LIBRARIES})
 
   add_compile_definitions(NDEBUG)
 
