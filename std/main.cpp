@@ -111,8 +111,8 @@ found_path:
     return 1;
   }
 
-  switch (
-      var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
+  switch (var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+              .location) {
     case OutputFactor::OUTPUT_STDOUT: {
       pid_t output_id = fork();
       if (output_id == 0) {
@@ -177,13 +177,13 @@ found_path:
                       outbuffer.begin() + size);
       }
 
-      if (!var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+      if (!var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
                .storage.has_value()) {
-        var_mem_usable->output_stack[var_mem_usable->stack_iterator].storage =
-            "";
+        var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+            .storage = "";
       }
 
-      var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
           .storage.value() += output;
     } break;
     case OutputFactor::OUTPUT_UNK:
@@ -311,7 +311,7 @@ void store_args_variable_memory(void* var_mem, uint64_t argc, char** argv) {
   auto var_mem_usable = (VariableMemory*)var_mem;
 
   for (uint64_t i = 0; i < argc; i++) {
-    var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+    var_mem_usable->function_stack[var_mem_usable->function_stack_iterator]
         .positional_arguments[std::to_string(i + 1)] = argv[i];
   }
 }
@@ -324,9 +324,10 @@ const char* get_variable_memory(void* var_mem, const char* key_str,
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
   std::string key(key_str, key_len);
-  if (var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+  if (var_mem_usable->function_stack[var_mem_usable->function_stack_iterator]
           .positional_arguments.contains(key)) {
-    return var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+    return var_mem_usable
+        ->function_stack[var_mem_usable->function_stack_iterator]
         .positional_arguments[key]
         .c_str();
   }
@@ -348,22 +349,33 @@ void push_output_stack(void* var_mem, uint16_t output_type) {
     return;
   }
 
-  var_mem_usable->stack_iterator++;
+  var_mem_usable->output_stack_iterator++;
 
-  var_mem_usable->output_stack[var_mem_usable->stack_iterator].location =
+  var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].location =
       (OutputFactor::OutputLocation)
           output_type;  // we can safely convert since its loc < UNK
   switch ((OutputFactor::OutputLocation)output_type) {
     case OutputFactor::OUTPUT_STDOUT:
       break;
     case OutputFactor::OUTPUT_STR:
-      var_mem_usable->output_stack[var_mem_usable->stack_iterator].storage = "";
+      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+          .storage = "";
       break;
     case OutputFactor::OUTPUT_UNK:
       std::unreachable();
   }
 }
 
+void push_function_stack(void* var_mem) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "llsh: variable memory is null");
+    return;
+  }
+  auto var_mem_usable = (VariableMemory*)var_mem;
+
+  var_mem_usable->function_stack_iterator++;
+  var_mem_usable->function_stack[var_mem_usable->function_stack_iterator] = {};
+}
 // the return value stays in memory till the next frame on its level overwrites
 // it
 const char* pop_output_stack(void* var_mem) {
@@ -373,21 +385,51 @@ const char* pop_output_stack(void* var_mem) {
   }
 
   auto var_mem_usable = (VariableMemory*)var_mem;
-  if (var_mem_usable->stack_iterator == 0) {
+  if (var_mem_usable->output_stack_iterator == 0) {
     return "";
   }
 
-  var_mem_usable->stack_iterator--;
+  var_mem_usable->output_stack_iterator--;
 
-  if (var_mem_usable->output_stack[var_mem_usable->stack_iterator + 1]
+  if (var_mem_usable->output_stack[var_mem_usable->output_stack_iterator + 1]
               .location == OutputFactor::OUTPUT_STR &&
-      var_mem_usable->output_stack[var_mem_usable->stack_iterator + 1]
+      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator + 1]
           .storage.has_value()) {
-    return var_mem_usable->output_stack[var_mem_usable->stack_iterator + 1]
+    return var_mem_usable
+        ->output_stack[var_mem_usable->output_stack_iterator + 1]
         .storage.value()
         .c_str();
   }
 
   return "";
 }
+void pop_function_stack(void* var_mem) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "llsh: variable memory is null");
+    return;
+  }
+
+  auto var_mem_usable = (VariableMemory*)var_mem;
+  if (var_mem_usable->function_stack_iterator == 0) {
+    return;
+  }
+
+  var_mem_usable->function_stack_iterator--;
+
+  return;
 }
+
+int fork_process_and_capture_stdout(void* var_mem) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "llsh: variable memory is null");
+    return -1;
+  }
+  auto var_mem_usable = (VariableMemory*)var_mem;
+
+  std::array<int, 2> impl_link;
+  pipe(impl_link.data());
+
+  int pid = fork();
+}
+}
+

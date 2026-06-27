@@ -15,4 +15,6 @@ SYMBOL(get_variable_memory)
 SYMBOL(free_variable_memory)
 SYMBOL(push_output_stack)
 SYMBOL(pop_output_stack)
+SYMBOL(push_function_stack)
+SYMBOL(pop_function_stack)
 

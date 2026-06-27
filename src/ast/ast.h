@@ -129,6 +129,33 @@ class NumericExprAST : public ExprAST {
       CodegenState& state) override;
 };
 
+class PipeExprAST : public ExprAST {
+ public:
+  PipeExprAST ( std::unique_ptr<ExprAST> first,
+                     std::unique_ptr<ExprAST> second)
+      : first(std::move(first)), second(std::move(second)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+    std::print("PipeExprAST\n");
+
+    first->print_name(level + 1);
+    second->print_name(level + 1);
+  }
+
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+
+ private:
+  std::unique_ptr<ExprAST> first;
+  std::unique_ptr<ExprAST> second;
+};
+
 class StatementOpExprAST : public ExprAST {
  public:
 #define OP(op) op,

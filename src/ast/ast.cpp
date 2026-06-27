@@ -692,6 +692,32 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
       case TOK_OPEN_PAREN_PAREN: {
         return_expr = parse_paren_math_expression(lexer_segments, cursor);
       } break;
+      case TOK_OR: {
+        if (!parse_ops) {
+          return last_expr;
+        }
+
+        current_segment = get_next_segment(lexer_segments, cursor);  // eat op
+
+        if (!last_expr.has_value()) {
+          UNEXPECTED_RETURN_WITH_WARNING();
+        }
+
+        auto righthandside =
+            parse_expression(lexer_segments, cursor, false, false);
+        if (!righthandside.has_value()) {
+          std::print(stderr, "{}", righthandside.error());
+          UNEXPECTED_RETURN_WITH_WARNING();
+        }
+        if (!righthandside.value().has_value()) {
+          UNEXPECTED_RETURN_WITH_WARNING();
+        }
+
+        return_expr = std::make_unique<PipeExprAST >(
+             std::move(last_expr.value()),
+            std::move(righthandside.value().value()));
+        last_expr = {};
+      } break;
       case TOK_AND_AND: {
         if (!parse_ops) {
           return last_expr;

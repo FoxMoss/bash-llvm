@@ -50,29 +50,30 @@ add_executable(llsh
  ../std/programs.cpp
 )
 
-if(NOT ZIG_TARGET)
-  target_precompile_headers(llsh
-    PRIVATE
-    <llvm/ADT/ArrayRef.h>
-    <llvm/IR/BasicBlock.h>
-    <llvm/IR/Constant.h>
-    <llvm/IR/IRBuilder.h>
-    <llvm/IR/Intrinsics.h>
-    <llvm/IR/Value.h>
-    <llvm/Support/Alignment.h>
-    <llvm/Support/raw_ostream.h>
-    <llvm/LinkAllPasses.h>
-    <llvm/Passes/CodeGenPassBuilder.h>
-    <llvm/Passes/PassBuilder.h>
-    <llvm/Passes/StandardInstrumentations.h>
-    <llvm/Support/ModRef.h>
-    <llvm/Support/TargetSelect.h>
-    <llvm/Transforms/Scalar/Reassociate.h>
-    <llvm/Transforms/Scalar/SimplifyCFG.h>
-    ast/ast.h
-    codegen.h
-  )
-endif()
+target_precompile_headers(llsh
+  PRIVATE
+  <llvm/ADT/ArrayRef.h>
+  <llvm/IR/BasicBlock.h>
+  <llvm/IR/Constant.h>
+  <llvm/IR/IRBuilder.h>
+  <llvm/IR/Intrinsics.h>
+  <llvm/IR/Value.h>
+  <llvm/Support/Alignment.h>
+  <llvm/Support/raw_ostream.h>
+  <llvm/LinkAllPasses.h>
+  <llvm/Passes/CodeGenPassBuilder.h>
+  <llvm/Passes/PassBuilder.h>
+  <llvm/Passes/StandardInstrumentations.h>
+  <llvm/Support/ModRef.h>
+  <llvm/Support/TargetSelect.h>
+  <llvm/Transforms/Scalar/Reassociate.h>
+  <llvm/Transforms/Scalar/SimplifyCFG.h>
+  <llvm/IR/DerivedTypes.h>
+  ast/ast.h
+  lexer.h
+  codegen.h
+  ../std/main.h
+)
 
 
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic)

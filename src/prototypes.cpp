@@ -152,6 +152,19 @@ void CodegenState::generate_standard_library() {
   {
     std::vector<llvm::Type*> bash_func_args = {
         llvm::PointerType::get(*this->context, 0),
+    };
+
+    llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+        llvm::Type::getVoidTy(*context), bash_func_args, false);
+
+    llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                           "pop_function_stack", module.get())
+        ->setMemoryEffects(llvm::MemoryEffects::unknown());
+  }
+
+  {
+    std::vector<llvm::Type*> bash_func_args = {
+        llvm::PointerType::get(*this->context, 0),
         llvm::Type::getInt16Ty(*this->context),
     };
 
@@ -160,6 +173,18 @@ void CodegenState::generate_standard_library() {
 
     llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
                            "push_output_stack", module.get())
+        ->setMemoryEffects(llvm::MemoryEffects::unknown());
+  }
+  {
+    std::vector<llvm::Type*> bash_func_args = {
+        llvm::PointerType::get(*this->context, 0),
+    };
+
+    llvm::FunctionType* bash_func_type = llvm::FunctionType::get(
+        llvm::Type::getVoidTy(*context), bash_func_args, false);
+
+    llvm::Function::Create(bash_func_type, llvm::Function::ExternalLinkage,
+                           "push_function_stack", module.get())
         ->setMemoryEffects(llvm::MemoryEffects::unknown());
   }
 

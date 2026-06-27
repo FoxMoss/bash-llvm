@@ -131,7 +131,7 @@ int bash_echo(void* var_mem, uint64_t argc, char** argv) {
   if (var_mem_usable->output_stack.size() == 0) return 1;
 
   switch (
-      var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
+      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].location) {
     case OutputFactor::OUTPUT_STDOUT:
       for (uint64_t i = 0; i < argc; i++) {
         std::print("{}", argv[i]);
@@ -143,19 +143,19 @@ int bash_echo(void* var_mem, uint64_t argc, char** argv) {
       break;
 
     case OutputFactor::OUTPUT_STR:
-      if (!var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+      if (!var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
                .storage.has_value()) {
-        var_mem_usable->output_stack[var_mem_usable->stack_iterator].storage =
+        var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].storage =
             "";
       }
 
-      if (var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+      if (var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
               .storage.has_value()) {
         for (uint64_t i = 0; i < argc; i++) {
-          var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+          var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
               .storage.value() += argv[i];
           if (i != argc - 1) {
-            var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+            var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
                 .storage.value() += " ";
           }
         }
@@ -229,19 +229,19 @@ int bash_printf(void* var_mem, uint64_t argc, char** argv) {
   if (var_mem_usable->output_stack.size() == 0) return 1;
 
   switch (
-      var_mem_usable->output_stack[var_mem_usable->stack_iterator].location) {
+      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].location) {
     case OutputFactor::OUTPUT_STDOUT:
       std::print("{}", out_string);
       break;
 
     case OutputFactor::OUTPUT_STR:
-      if (!var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+      if (!var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
                .storage.has_value()) {
-        var_mem_usable->output_stack[var_mem_usable->stack_iterator].storage =
+        var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].storage =
             "";
       }
 
-      var_mem_usable->output_stack[var_mem_usable->stack_iterator]
+      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
           .storage.value() += out_string;
       break;
     case OutputFactor::OUTPUT_UNK:

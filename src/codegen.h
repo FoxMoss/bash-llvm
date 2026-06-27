@@ -86,20 +86,20 @@ struct CodegenState {
 
   void store_variable_memory(std::string name, std::string val) {
     if (!named_values["variable_memory"].has_value()) {
-      std::println("Variable map does not exist");
+      std::println(stderr, "error: variable map does not exist");
       return;
     }
 
     llvm::Function* program_called =
         module->getFunction("store_variable_memory");
     if (!program_called) {
-      std::println("Variable getter does not exist");
+      std::println(stderr, "error: variable getter does not exist");
       return;
     }
 
     // If argument mismatch error.
     if (program_called->arg_size() != 5) {
-      std::println("Helper store_variable_memory is illdefined");
+      std::println("helper store_variable_memory is illdefined");
       return;
     }
 
@@ -116,7 +116,7 @@ struct CodegenState {
   std::expected<void, std::string> runtime_push_output_stack(
       uint16_t location_type) {
     if (!named_values["variable_memory"].has_value()) {
-      return std::unexpected("Variable map does not exist");
+      return std::unexpected("variable map does not exist");
     }
 
     llvm::Function* program_called = module->getFunction("push_output_stack");
@@ -155,6 +155,47 @@ struct CodegenState {
     return builder->CreateCall(program_called, arg_values);
   }
 
+  std::expected<void, std::string> runtime_push_function_stack() {
+    if (!named_values["variable_memory"].has_value()) {
+      return std::unexpected("Variable map does not exist");
+    }
+
+    llvm::Function* program_called = module->getFunction("push_function_stack");
+    if (!program_called)
+      return std::unexpected("push_function_stack does not exist");
+
+    // If argument mismatch error.
+    if (program_called->arg_size() != 1)
+      return std::unexpected("Helper push_function_stack is illdefined");
+
+    std::vector<llvm::Value*> arg_values = {
+        named_values["variable_memory"].value(),
+    };
+
+    builder->CreateCall(program_called, arg_values);
+    return {};
+  }
+
+  std::expected<void, std::string> runtime_pop_function_stack() {
+    if (!named_values["variable_memory"].has_value()) {
+      return std::unexpected("Variable map does not exist");
+    }
+
+    llvm::Function* program_called = module->getFunction("pop_function_stack");
+    if (!program_called)
+      return std::unexpected("pop_function_stack does not exist");
+
+    // If argument mismatch error.
+    if (program_called->arg_size() != 1)
+      return std::unexpected("Helper pop_function_stack is illdefined");
+
+    std::vector<llvm::Value*> arg_values = {
+        named_values["variable_memory"].value()};
+
+    builder->CreateCall(program_called, arg_values);
+    return {};
+  }
+
   void generate_entry() {
     llvm::FunctionType* entry_type =
         llvm::FunctionType::get(llvm::Type::getVoidTy(*context), false);
@@ -167,14 +208,23 @@ struct CodegenState {
     builder->SetInsertPoint(entry_block);
 
     generate_variable_memory();
-    if (!runtime_push_output_stack(0).has_value()) {
-      std::println(stderr, "Error while pushing stack");
+    auto func_stack = runtime_push_function_stack();
+    if (!func_stack.has_value()) {
+      std::println(stderr, "error: pushing func stack {}", func_stack.error());
+    }
+    auto out_stack = runtime_push_output_stack(0);
+    if (!out_stack.has_value()) {
+      std::println(stderr, "error: pushing out stack {}", out_stack.error());
     }
   }
 
   void generate_exit(bool continue_state) {
     if (!runtime_pop_output_stack().has_value()) {
-      std::println(stderr, "Error while popping stack");
+      std::println(stderr, "error: could not pop func stack");
+      return;
+    }
+    if (!runtime_pop_function_stack().has_value()) {
+      std::println(stderr, "error: could not pop out stack");
       return;
     }
 

@@ -133,6 +133,11 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
       llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(*state.context), 0));
 }
 
+std::expected<llvm::Value*, std::string> PipeExprAST::codegen(
+    CodegenState& state) {
+  return std::unexpected("pipes are not implemented");
+}
+
 std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(
     CodegenState& state) {
   llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
@@ -240,7 +245,7 @@ std::expected<llvm::Value*, std::string> RangeArrayExprAST::codegen(
 
     auto member_const = static_cast<llvm::Constant*>(member_value.value());
     if (member_const == nullptr) {
-      return std::unexpected("Range value not constant");
+      return std::unexpected("range value not constant");
     }
 
     if (!val.has_value()) {
@@ -257,7 +262,7 @@ std::expected<llvm::Value*, std::string> RangeArrayExprAST::codegen(
   }
 
   if (!val.has_value()) {
-    return std::unexpected("Could not make vector");
+    return std::unexpected("could not make vector");
   }
 
   return val.value();
@@ -271,7 +276,7 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
   UNWRAP_EXPECTED(first_array)
 
   if (!first_array.value()->getType()->isVectorTy()) {
-    return std::unexpected("First value not an array");
+    return std::unexpected("first value not an array");
   }
 
   auto first_constant = static_cast<llvm::ConstantVector*>(first_array.value());
@@ -280,14 +285,14 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
       static_cast<llvm::FixedVectorType*>(first_array.value()->getType());
 
   if (first_constant == nullptr || first_array_type == nullptr) {
-    return std::unexpected("First value not an array");
+    return std::unexpected("first value not an array");
   }
 
   auto second_array = second->codegen(state);
   UNWRAP_EXPECTED(second_array)
 
   if (!second_array.value()->getType()->isVectorTy()) {
-    return std::unexpected("Second value not an vector");
+    return std::unexpected("second value not an vector");
   }
 
   auto second_constant =
@@ -297,7 +302,7 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
       static_cast<llvm::FixedVectorType*>(second_array.value()->getType());
 
   if (second_constant == nullptr || second_array_type == nullptr) {
-    return std::unexpected("Second value not an array");
+    return std::unexpected("second value not an array");
   }
 
   std::optional<llvm::Value*> val;
@@ -348,7 +353,7 @@ std::expected<llvm::Value*, std::string> ConcatExprAST::codegen(
   }
 
   if (!val.has_value()) {
-    return std::unexpected("Could not concatate ranges");
+    return std::unexpected("could not concatate ranges");
   }
 
   return val.value();
@@ -604,7 +609,7 @@ std::expected<llvm::Value*, std::string> IfAST::codegen(CodegenState& state) {
 
 std::expected<llvm::Value*, std::string> InjectIntoStringAST::codegen(
     CodegenState& state) {
-  auto pushed_stack = state.runtime_push_output_stack(1 /* 1 == OUTPUT_STR */);
+  auto pushed_stack = state.runtime_push_output_stack(1 /* 1 == STRING */);
   UNWRAP_EXPECTED(pushed_stack)
   auto body_val = body->codegen(state);
   UNWRAP_EXPECTED(body_val)

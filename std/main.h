@@ -12,19 +12,26 @@ struct OutputFactor {
   enum OutputLocation {
     OUTPUT_STDOUT = 0,
     OUTPUT_STR = 1,
-    OUTPUT_UNK = 2  // UNK must always be the largest and there can no be no
+    OUTPUT_CAPTURED_STDOUT = 2,
+    OUTPUT_UNK = 3  // UNK must always be the largest and there can no be no
                     // gaps otherwise checking fails
   } location;
 
-  std::map<std::string, std::string> positional_arguments;
-
   std::optional<std::string> storage;
+
+  std::optional<int> private_stdin;
+};
+
+struct FunctionFactor {
+  std::map<std::string, std::string> positional_arguments;
 };
 
 struct VariableMemory {
   std::map<std::string, std::string> memory;
   std::map<uint64_t, OutputFactor> output_stack;
-  uint64_t stack_iterator;
+  uint64_t output_stack_iterator;
+  std::map<uint64_t, FunctionFactor> function_stack;
+  uint64_t function_stack_iterator;
 
   std::map<std::string, bool> shell_options;
 };
@@ -67,5 +74,8 @@ void push_output_stack(void* var_mem, uint16_t output_type);
 // the return value stays in memory till the next frame on its level overwrites
 // it
 const char* pop_output_stack(void* var_mem);
+
+void push_function_stack(void* var_mem);
+void pop_function_stack(void* var_mem);
 }
 
