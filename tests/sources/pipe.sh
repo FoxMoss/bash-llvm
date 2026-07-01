@@ -1,1 +1,1 @@
-ls ~/Projects/ | xargs -I % ls ~/Projects/%
+ls | xargs -I % ls %

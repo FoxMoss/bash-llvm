@@ -27,3 +27,13 @@ std::expected<llvm::Value*, std::string> runtime_strequals(CodegenState& state,
                                                            bool for_case);
 std::expected<llvm::Value*, std::string> get_variable_memory(
     CodegenState& state, std::string name);
+std::expected<llvm::Value*, std::string>
+runtime_fork_process_and_capture_stdout(CodegenState& state);
+std::expected<llvm::Value*, std::string> runtime_fork_process(
+    CodegenState& state);
+std::expected<llvm::Value*, std::string> runtime_fork_process_and_capture_stdin(
+    CodegenState& state);
+std::expected<llvm::Value*, std::string> runtime_exit(CodegenState& state,
+                                                      llvm::Value* status);
+std::expected<llvm::Value*, std::string> runtime_wait_two_pid(
+    CodegenState& state, llvm::Value* pid1, llvm::Value* pid2);

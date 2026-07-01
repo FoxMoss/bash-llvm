@@ -303,4 +303,4 @@ std::expected<llvm::Value*, std::string> runtime_strlen(CodegenState& state,
                                                         llvm::Value* val);
 
 #define UNWRAP_EXPECTED(val) \
-  if (!val.has_value()) return std::unexpected(val.error());
+  if (!(val).has_value()) return std::unexpected((val).error());

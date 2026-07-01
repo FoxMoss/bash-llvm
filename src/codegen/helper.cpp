@@ -343,3 +343,100 @@ std::expected<llvm::Value*, std::string> runtime_strequals(CodegenState& state,
 
   return state.builder->CreateCall(program_called, arg_values);
 }
+
+std::expected<llvm::Value*, std::string>
+runtime_fork_process_and_capture_stdout(CodegenState& state) {
+  llvm::Function* program_called =
+      state.module->getFunction("fork_process_and_capture_stdout");
+  if (!program_called)
+    return std::unexpected("fork_process_and_capture_stdout not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 1)
+    return std::unexpected(
+        "Func fork_process_and_capture_stdout is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value()};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+std::expected<llvm::Value*, std::string> runtime_fork_process_and_capture_stdin(
+    CodegenState& state) {
+  llvm::Function* program_called =
+      state.module->getFunction("fork_process_and_capture_stdin");
+  if (!program_called)
+    return std::unexpected("fork_process_and_capture_stdin not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 1)
+    return std::unexpected(
+        "Func fork_process_and_capture_stdin is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value()};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+std::expected<llvm::Value*, std::string> runtime_fork_process(
+    CodegenState& state) {
+  llvm::Function* program_called =
+      state.module->getFunction("fork_process");
+  if (!program_called)
+    return std::unexpected("fork_process not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 1)
+    return std::unexpected(
+        "Func fork_process is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value()};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+
+std::expected<llvm::Value*, std::string> runtime_exit(CodegenState& state,
+                                                      llvm::Value* status) {
+  llvm::Function* program_called = state.module->getFunction("exit_helper");
+  if (!program_called) return std::unexpected("exit_helper not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 1)
+    return std::unexpected("Func exit_helper is illdefined");
+
+  std::vector<llvm::Value*> arg_values = {status};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+
+std::expected<llvm::Value*, std::string> runtime_wait_two_pid(
+    CodegenState& state, llvm::Value* pid1, llvm::Value* pid2) {
+  llvm::Function* program_called = state.module->getFunction("wait_two_pid");
+  if (!program_called) return std::unexpected("wait_two_pid not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 3)
+    return std::unexpected("Func wait_two_pid is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(), pid1, pid2};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}

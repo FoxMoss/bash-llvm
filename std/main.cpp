@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -114,29 +115,20 @@ found_path:
   switch (var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
               .location) {
     case OutputFactor::OUTPUT_STDOUT: {
-      pid_t output_id = fork();
-      if (output_id == 0) {
-        auto environ_data = colapse_enviroment(var_mem);
-        std::vector<char*> environ_cstr;
-        for (auto var : environ_data) {
-          environ_cstr.push_back(strdup((char*)var.c_str()));
-        }
-        environ_cstr.push_back(nullptr);
-
-        std::vector<char*> argv_vector;
-        argv_vector.push_back((char*)extended_path->c_str());
-        argv_vector.insert(argv_vector.end(), argv, argv + argc);
-        argv_vector.push_back(nullptr);
-        execve(extended_path->c_str(), argv_vector.data(), environ_cstr.data());
-
-        for (auto var : environ_cstr) {
-          free(var);
-        }
-
-        return 1;
+      auto environ_data = colapse_enviroment(var_mem);
+      std::vector<char*> environ_cstr;
+      for (auto var : environ_data) {
+        environ_cstr.push_back(strdup((char*)var.c_str()));
       }
-      int status;
-      waitpid(output_id, &status, 0);
+      environ_cstr.push_back(nullptr);
+
+      std::vector<char*> argv_vector;
+      argv_vector.push_back((char*)extended_path->c_str());
+      argv_vector.insert(argv_vector.end(), argv, argv + argc);
+      argv_vector.push_back(nullptr);
+      execve(extended_path->c_str(), argv_vector.data(), environ_cstr.data());
+
+      exit(0);
     } break;
 
     case OutputFactor::OUTPUT_STR: {
@@ -419,6 +411,44 @@ void pop_function_stack(void* var_mem) {
   return;
 }
 
+int fork_process_and_capture_stdin(void* var_mem) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "llsh: variable memory is null");
+    return -1;
+  }
+  auto var_mem_usable = (VariableMemory*)var_mem;
+
+  var_mem_usable->output_stack_iterator++;
+
+  var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].location =
+      OutputFactor::OUTPUT_STDOUT;
+
+  std::array<int, 2> impl_link;
+  if (pipe(impl_link.data()) == -1) {
+    auto p = errno;
+    std::println(stderr, "error: {} {}", p, strerror(p));
+  }
+
+  var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+      .private_stdin = impl_link[1];
+
+  auto forked_id = fork();
+
+  if (forked_id == 0) {
+    int dup_ret = dup2(impl_link[0], STDIN_FILENO);  // read end
+    if (dup_ret == -1) {
+      std::println(stderr, "error: {}", strerror(errno));
+    }
+
+    close(impl_link[0]);
+    close(impl_link[1]);
+  } else {
+    close(impl_link[0]);
+  }
+
+  return forked_id;
+}
+
 int fork_process_and_capture_stdout(void* var_mem) {
   if (var_mem == nullptr) {
     std::println(stderr, "llsh: variable memory is null");
@@ -426,10 +456,62 @@ int fork_process_and_capture_stdout(void* var_mem) {
   }
   auto var_mem_usable = (VariableMemory*)var_mem;
 
-  std::array<int, 2> impl_link;
-  pipe(impl_link.data());
+  auto lower_stdin =
+      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+          .private_stdin;
 
-  int pid = fork();
+  var_mem_usable->output_stack_iterator++;
+
+  var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].location =
+      OutputFactor::OUTPUT_STDOUT;
+
+  auto forked_id = fork();
+
+  if (forked_id == 0) {
+    if (lower_stdin.has_value()) {
+      int dup_ret = dup2(lower_stdin.value(), STDOUT_FILENO);
+      if (dup_ret == -1) {
+        std::println(stderr, "error: {}", strerror(errno));
+      }
+      close(lower_stdin.value());
+    }
+
+  } else {
+    if (lower_stdin.has_value()) {
+      close(lower_stdin.value());
+    }
+  }
+
+  return forked_id;
+}
+int fork_process(void* var_mem) {
+  if (var_mem == nullptr) {
+    std::println(stderr, "llsh: variable memory is null");
+    return -1;
+  }
+  auto var_mem_usable = (VariableMemory*)var_mem;
+
+  return fork();
+}
+int exit_helper(int status) { exit(status); }
+int wait_two_pid(void* var_mem, int pid1, int pid2) {
+  if (pid2 == 0) {
+    int stat_loc1 = 0;
+
+    waitpid(pid1, &stat_loc1, 0);
+    return WIFEXITED(stat_loc1);
+  }
+
+  int stat_loc1 = 0;
+  waitpid(pid1, &stat_loc1, 0);
+
+  int stat_loc2 = 0;
+  waitpid(pid2, &stat_loc2, 0);
+
+  if (WIFEXITED(stat_loc1) != 0) return WIFEXITED(stat_loc1);
+  if (WIFEXITED(stat_loc2) != 0) return WIFEXITED(stat_loc2);
+
+  return 0;
 }
 }
 

@@ -128,14 +128,122 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
                         llvm::PointerType::get(*state.context, 0))};
     }
   }
-  return state.builder->CreateICmpEQ(
-      state.builder->CreateCall(program_called, arg_values),
-      llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(*state.context), 0));
+
+  if (external_program) {
+    auto pid = runtime_fork_process(state);
+
+    UNWRAP_EXPECTED(pid);
+
+    llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* forked = llvm::BasicBlock::Create(
+        *state.context, "processisforked", parent_func);
+    llvm::BasicBlock* notforked =
+        llvm::BasicBlock::Create(*state.context, "processnotforked");
+
+    auto in_fork = state.builder->CreateICmpEQ(
+        pid.value(), llvm::ConstantInt::get(
+                         llvm::IntegerType::getInt32Ty(*state.context), 0));
+    state.builder->CreateCondBr(in_fork, forked, notforked);
+
+    state.builder->SetInsertPoint(forked);
+
+    auto status = state.builder->CreateICmpEQ(
+        state.builder->CreateCall(program_called, arg_values),
+        llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(*state.context),
+                               0));
+
+    auto exit_errors = runtime_exit(state, status);
+    UNWRAP_EXPECTED(exit_errors)
+
+    state.builder->CreateBr(notforked);  // this should never be called
+
+    parent_func->insert(parent_func->end(), notforked);
+
+    state.builder->SetInsertPoint(notforked);
+
+    auto wait = runtime_wait_two_pid(
+        state, pid.value(),
+        llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(*state.context),
+                               0));
+    UNWRAP_EXPECTED(wait);
+
+    return wait.value();
+  } else {
+    return state.builder->CreateICmpEQ(
+        state.builder->CreateCall(program_called, arg_values),
+        llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(*state.context),
+                               0));
+  }
 }
 
 std::expected<llvm::Value*, std::string> PipeExprAST::codegen(
     CodegenState& state) {
-  return std::unexpected("pipes are not implemented");
+  auto pid = runtime_fork_process_and_capture_stdin(state);
+
+  UNWRAP_EXPECTED(pid);
+
+  llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
+  llvm::BasicBlock* forked =
+      llvm::BasicBlock::Create(*state.context, "parentisforked", parent_func);
+  llvm::BasicBlock* notforked =
+      llvm::BasicBlock::Create(*state.context, "parentnotforked");
+
+  auto in_fork = state.builder->CreateICmpEQ(
+      pid.value(),
+      llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(*state.context), 0));
+  state.builder->CreateCondBr(in_fork, forked, notforked);
+
+  state.builder->SetInsertPoint(forked);
+
+  auto second_value = second->codegen(state);
+  UNWRAP_EXPECTED(second_value)
+
+  auto exit_errors = runtime_exit(state, second_value.value());
+  UNWRAP_EXPECTED(exit_errors)
+
+  state.builder->CreateBr(notforked);  // this should never be called
+
+  parent_func->insert(parent_func->end(), notforked);
+
+  state.builder->SetInsertPoint(notforked);
+
+  auto pid2 = runtime_fork_process_and_capture_stdout(state);
+  UNWRAP_EXPECTED(pid2)
+
+  llvm::BasicBlock* childforked =
+      llvm::BasicBlock::Create(*state.context, "childisforked", parent_func);
+  llvm::BasicBlock* childnotforked =
+      llvm::BasicBlock::Create(*state.context, "childnotforked");
+
+  in_fork = state.builder->CreateICmpEQ(
+      pid2.value(),
+      llvm::ConstantInt::get(llvm::IntegerType::getInt32Ty(*state.context), 0));
+  state.builder->CreateCondBr(in_fork, childforked, childnotforked);
+
+  state.builder->SetInsertPoint(childforked);
+
+  auto first_value = first->codegen(state);
+  UNWRAP_EXPECTED(first_value)
+
+  exit_errors = runtime_exit(state, first_value.value());
+  UNWRAP_EXPECTED(exit_errors)
+
+  state.builder->CreateBr(childnotforked);  // this should never be called
+
+  parent_func->insert(parent_func->end(), childnotforked);
+
+  state.builder->SetInsertPoint(childnotforked);
+
+  auto popped = state.runtime_pop_output_stack();
+  UNWRAP_EXPECTED(popped)
+
+  popped = state.runtime_pop_output_stack();
+  UNWRAP_EXPECTED(popped)
+
+  auto wait = runtime_wait_two_pid(state, pid.value(), pid2.value());
+  UNWRAP_EXPECTED(wait)
+
+  return wait.value();
 }
 
 std::expected<llvm::Value*, std::string> StatementOpExprAST::codegen(

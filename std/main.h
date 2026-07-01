@@ -12,14 +12,13 @@ struct OutputFactor {
   enum OutputLocation {
     OUTPUT_STDOUT = 0,
     OUTPUT_STR = 1,
-    OUTPUT_CAPTURED_STDOUT = 2,
-    OUTPUT_UNK = 3  // UNK must always be the largest and there can no be no
+    OUTPUT_UNK = 2  // UNK must always be the largest and there can no be no
                     // gaps otherwise checking fails
   } location;
 
-  std::optional<std::string> storage;
+  std::optional<std::string> storage = {};
 
-  std::optional<int> private_stdin;
+  std::optional<int> private_stdin = {};
 };
 
 struct FunctionFactor {
@@ -77,5 +76,11 @@ const char* pop_output_stack(void* var_mem);
 
 void push_function_stack(void* var_mem);
 void pop_function_stack(void* var_mem);
+
+int fork_process_and_capture_stdin(void* var_mem);
+int fork_process_and_capture_stdout(void* var_mem);
+int fork_process(void* var_mem);
+int exit_helper(int status);
+int wait_two_pid(void* var_mem, int pid1, int pid2);
 }
 

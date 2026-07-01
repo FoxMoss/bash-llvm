@@ -201,4 +201,54 @@ void CodegenState::generate_standard_library() {
     llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                            "external_program", module.get());
   }
+  {
+    std::vector<llvm::Type*> func_args = {
+        llvm::PointerType::get(*this->context, 0)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::Type::getInt32Ty(*context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "fork_process_and_capture_stdout", module.get());
+  }
+  {
+    std::vector<llvm::Type*> func_args = {
+        llvm::PointerType::get(*this->context, 0)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::Type::getInt32Ty(*context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "fork_process_and_capture_stdin", module.get());
+  }
+  {
+    std::vector<llvm::Type*> func_args = {
+        llvm::PointerType::get(*this->context, 0)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::Type::getInt32Ty(*context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "fork_process", module.get());
+  }
+  {
+    std::vector<llvm::Type*> func_args = {llvm::Type::getInt32Ty(*context)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::Type::getInt32Ty(*context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "exit_helper", module.get());
+  }
+  {
+    std::vector<llvm::Type*> func_args = {llvm::Type::getInt32Ty(*context),
+                                          llvm::Type::getInt32Ty(*context),
+                                          llvm::Type::getInt32Ty(*context)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::Type::getInt32Ty(*context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "wait_two_pid", module.get());
+  }
 }
