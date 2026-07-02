@@ -513,5 +513,25 @@ int wait_two_pid(void* var_mem, int pid1, int pid2) {
 
   return 0;
 }
-}
 
+char* expand_program_argument(void* var_mem, char* arg) {
+  const auto arg_str = std::string(arg);
+  if (!arg_str.starts_with("~/")) {
+    return strdup(arg);
+  }
+
+  const auto last_half = arg_str.substr(2, -1);
+
+  const std::string home_key = "HOME";
+
+  auto home_path = std::string(
+      get_variable_memory(var_mem, home_key.c_str(), home_key.size()));
+  if (home_path.empty()) {
+    home_path = "/";
+  }
+
+  auto expanded = home_path + "/" + last_half;
+
+  return strdup(expanded.c_str());
+}
+}

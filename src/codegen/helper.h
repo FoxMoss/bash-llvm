@@ -37,3 +37,5 @@ std::expected<llvm::Value*, std::string> runtime_exit(CodegenState& state,
                                                       llvm::Value* status);
 std::expected<llvm::Value*, std::string> runtime_wait_two_pid(
     CodegenState& state, llvm::Value* pid1, llvm::Value* pid2);
+std::expected<llvm::Value*, std::string> runtime_expand_program_argument(
+    CodegenState& state, llvm::Value* argument) ;

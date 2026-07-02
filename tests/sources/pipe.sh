@@ -1,1 +1,1 @@
-ls | xargs -I % ls %
+ls ~/Downloads/ | xargs -I % ls ~/Downloads/%

@@ -374,8 +374,7 @@ std::expected<llvm::Value*, std::string> runtime_fork_process_and_capture_stdin(
 
   // If argument mismatch error.
   if (program_called->arg_size() != 1)
-    return std::unexpected(
-        "Func fork_process_and_capture_stdin is illdefined");
+    return std::unexpected("Func fork_process_and_capture_stdin is illdefined");
 
   if (!state.named_values["variable_memory"].has_value()) {
     return std::unexpected("Variable map does not exist");
@@ -388,15 +387,12 @@ std::expected<llvm::Value*, std::string> runtime_fork_process_and_capture_stdin(
 }
 std::expected<llvm::Value*, std::string> runtime_fork_process(
     CodegenState& state) {
-  llvm::Function* program_called =
-      state.module->getFunction("fork_process");
-  if (!program_called)
-    return std::unexpected("fork_process not defined");
+  llvm::Function* program_called = state.module->getFunction("fork_process");
+  if (!program_called) return std::unexpected("fork_process not defined");
 
   // If argument mismatch error.
   if (program_called->arg_size() != 1)
-    return std::unexpected(
-        "Func fork_process is illdefined");
+    return std::unexpected("Func fork_process is illdefined");
 
   if (!state.named_values["variable_memory"].has_value()) {
     return std::unexpected("Variable map does not exist");
@@ -440,3 +436,23 @@ std::expected<llvm::Value*, std::string> runtime_wait_two_pid(
 
   return state.builder->CreateCall(program_called, arg_values);
 }
+
+std::expected<llvm::Value*, std::string> runtime_expand_program_argument(
+    CodegenState& state, llvm::Value* argument) {
+  llvm::Function* program_called = state.module->getFunction("expand_program_argument");
+  if (!program_called) return std::unexpected("expand_program_argument not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 2)
+    return std::unexpected("Func expand_program_argument is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(), argument};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+

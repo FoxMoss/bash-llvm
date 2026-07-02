@@ -14,7 +14,8 @@ void bash_interpret(std::string file_name, bool debug,
                     SandboxingOptions sandboxing) {
   auto source_file = File::open(file_name);
   if (!source_file.has_value()) {
-    std::println(stderr, "Error {} does not exist.", file_name);
+    std::println(stderr, "error: {} does not exist.", file_name);
+    return;
   }
   std::string file_contents = source_file->contents();
 

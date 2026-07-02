@@ -42,6 +42,53 @@ std::expected<llvm::Value*, std::string> IdentifierExprAST::codegen(
   return get_variable_memory(state, name);
 }
 
+std::expected<llvm::Value*, std::string> expand_args(
+    CodegenState& state, llvm::Value* array) {
+  std::vector<llvm::Constant*> values_llvm;
+
+  if (!array->getType()->isVectorTy()) {
+    return std::unexpected("first value not an array");
+  }
+
+  auto constant = static_cast<llvm::ConstantVector*>(array);
+
+  auto array_type =
+      static_cast<llvm::FixedVectorType*>(array->getType());
+
+  if (constant == nullptr || array_type == nullptr) {
+    return std::unexpected("first value not an array");
+  }
+
+  std::optional<llvm::Value*> val;
+
+  for (uint64_t i = 0; i < array_type->getNumElements(); i++) {
+    auto value =
+        state.builder->CreateExtractElement(constant, uint64_t{i});
+    auto static_value = runtime_expand_program_argument(state, static_cast<llvm::Constant*>(value));
+    if (static_value == nullptr) {
+      continue;
+    }
+    UNWRAP_EXPECTED(static_value)
+
+    if (!val.has_value()) {
+      val = state.builder->CreateInsertElement(
+          llvm::VectorType::get(
+              llvm::PointerType::get(*state.context, 0),
+              llvm::ElementCount::get(array_type->getNumElements() +
+                                          array_type->getNumElements(),
+                                      false)),
+          static_value.value(), i);
+    } else {
+      val = state.builder->CreateInsertElement(val.value(), static_value.value(), i);
+    }
+  }
+
+  if (!val.has_value()) {
+    return std::unexpected("could not expand args");
+  }
+
+  return val.value();
+}
 std::expected<llvm::Value*, std::string> CallExprAST::codegen(
     CodegenState& state) {
   llvm::Function* program_called =
@@ -74,7 +121,10 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
       return std::unexpected("Args value not an array");
     }
 
-    auto args_array = static_cast<llvm::ConstantVector*>(args_codegen.value());
+    auto expanded = expand_args(state, args_codegen.value());
+    UNWRAP_EXPECTED(expanded )
+
+    auto args_array = static_cast<llvm::ConstantVector*>(expanded .value());
 
     auto args_array_type =
         static_cast<llvm::FixedVectorType*>(args_codegen.value()->getType());

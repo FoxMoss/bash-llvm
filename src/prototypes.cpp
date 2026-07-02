@@ -251,4 +251,13 @@ void CodegenState::generate_standard_library() {
     llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                            "wait_two_pid", module.get());
   }
+  {
+    std::vector<llvm::Type*> func_args = {llvm::PointerType::get(*this->context, 0), llvm::PointerType::get(*this->context, 0)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::PointerType::get(*this->context, 0), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "expand_program_argument", module.get());
+  }
 }
