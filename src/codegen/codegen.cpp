@@ -42,8 +42,8 @@ std::expected<llvm::Value*, std::string> IdentifierExprAST::codegen(
   return get_variable_memory(state, name);
 }
 
-std::expected<llvm::Value*, std::string> expand_args(
-    CodegenState& state, llvm::Value* array) {
+std::expected<llvm::Value*, std::string> expand_args(CodegenState& state,
+                                                     llvm::Value* array) {
   std::vector<llvm::Constant*> values_llvm;
 
   if (!array->getType()->isVectorTy()) {
@@ -52,8 +52,7 @@ std::expected<llvm::Value*, std::string> expand_args(
 
   auto constant = static_cast<llvm::ConstantVector*>(array);
 
-  auto array_type =
-      static_cast<llvm::FixedVectorType*>(array->getType());
+  auto array_type = static_cast<llvm::FixedVectorType*>(array->getType());
 
   if (constant == nullptr || array_type == nullptr) {
     return std::unexpected("first value not an array");
@@ -62,9 +61,9 @@ std::expected<llvm::Value*, std::string> expand_args(
   std::optional<llvm::Value*> val;
 
   for (uint64_t i = 0; i < array_type->getNumElements(); i++) {
-    auto value =
-        state.builder->CreateExtractElement(constant, uint64_t{i});
-    auto static_value = runtime_expand_program_argument(state, static_cast<llvm::Constant*>(value));
+    auto value = state.builder->CreateExtractElement(constant, uint64_t{i});
+    auto static_value = runtime_expand_program_argument(
+        state, static_cast<llvm::Constant*>(value));
     if (static_value == nullptr) {
       continue;
     }
@@ -74,12 +73,13 @@ std::expected<llvm::Value*, std::string> expand_args(
       val = state.builder->CreateInsertElement(
           llvm::VectorType::get(
               llvm::PointerType::get(*state.context, 0),
-              llvm::ElementCount::get(array_type->getNumElements() +
-                                          array_type->getNumElements(),
-                                      false)),
+              llvm::ElementCount::get(
+                  array_type->getNumElements() + array_type->getNumElements(),
+                  false)),
           static_value.value(), i);
     } else {
-      val = state.builder->CreateInsertElement(val.value(), static_value.value(), i);
+      val = state.builder->CreateInsertElement(val.value(),
+                                               static_value.value(), i);
     }
   }
 
@@ -122,9 +122,9 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
     }
 
     auto expanded = expand_args(state, args_codegen.value());
-    UNWRAP_EXPECTED(expanded )
+    UNWRAP_EXPECTED(expanded)
 
-    auto args_array = static_cast<llvm::ConstantVector*>(expanded .value());
+    auto args_array = static_cast<llvm::ConstantVector*>(expanded.value());
 
     auto args_array_type =
         static_cast<llvm::FixedVectorType*>(args_codegen.value()->getType());
@@ -853,3 +853,29 @@ std::expected<llvm::Value*, std::string> CaseExprAST::codegen(
   return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
+std::expected<llvm::Value*, std::string> RedirectExprAST::codegen(
+    CodegenState& state) {
+  // TODO: implement different redirects
+  auto pushed_stack = state.runtime_push_output_stack(1 /* 1 == STRING */);
+  UNWRAP_EXPECTED(pushed_stack)
+  auto body_val = body->codegen(state);
+  UNWRAP_EXPECTED(body_val)
+
+  auto data_str = state.runtime_pop_output_stack();
+  UNWRAP_EXPECTED(data_str)
+
+  if (!out_file.has_value()) {
+    return std::unexpected("redirect must have output");
+  }
+  auto file_name = out_file.value()->codegen(state);
+  UNWRAP_EXPECTED(file_name)
+
+  auto data_len = runtime_strlen(state, data_str.value());
+  UNWRAP_EXPECTED(data_len);
+
+  auto written = runtime_write_to_location(state, data_str.value(),
+                                           data_len.value(), file_name.value());
+  UNWRAP_EXPECTED(written)
+
+  return written.value();
+}

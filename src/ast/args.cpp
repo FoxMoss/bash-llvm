@@ -263,6 +263,8 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
         }
 
       } break;
+      case TOK_GREATER:
+        [[fallthrough]];
       case TOK_AND:
         [[fallthrough]];
       case TOK_AND_AND:

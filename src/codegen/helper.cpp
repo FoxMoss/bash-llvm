@@ -439,8 +439,10 @@ std::expected<llvm::Value*, std::string> runtime_wait_two_pid(
 
 std::expected<llvm::Value*, std::string> runtime_expand_program_argument(
     CodegenState& state, llvm::Value* argument) {
-  llvm::Function* program_called = state.module->getFunction("expand_program_argument");
-  if (!program_called) return std::unexpected("expand_program_argument not defined");
+  llvm::Function* program_called =
+      state.module->getFunction("expand_program_argument");
+  if (!program_called)
+    return std::unexpected("expand_program_argument not defined");
 
   // If argument mismatch error.
   if (program_called->arg_size() != 2)
@@ -456,3 +458,23 @@ std::expected<llvm::Value*, std::string> runtime_expand_program_argument(
   return state.builder->CreateCall(program_called, arg_values);
 }
 
+std::expected<llvm::Value*, std::string> runtime_write_to_location(
+    CodegenState& state, llvm::Value* data, llvm::Value* data_len,
+    llvm::Value* file) {
+  llvm::Function* program_called =
+      state.module->getFunction("write_to_location");
+  if (!program_called) return std::unexpected("write_to_location not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 4)
+    return std::unexpected("Func write_to_location is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(), data, data_len, file};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}

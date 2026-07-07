@@ -83,5 +83,7 @@ int fork_process(void* var_mem);
 int exit_helper(int status);
 int wait_two_pid(void* var_mem, int pid1, int pid2);
 char* expand_program_argument(void* var_mem, char* arg);
+int write_to_location(void* var_mem, const char* data, size_t data_len,
+                      const char* file);
 }
 

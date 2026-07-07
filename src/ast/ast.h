@@ -131,8 +131,7 @@ class NumericExprAST : public ExprAST {
 
 class PipeExprAST : public ExprAST {
  public:
-  PipeExprAST ( std::unique_ptr<ExprAST> first,
-                     std::unique_ptr<ExprAST> second)
+  PipeExprAST(std::unique_ptr<ExprAST> first, std::unique_ptr<ExprAST> second)
       : first(std::move(first)), second(std::move(second)) {}
 
   void print_name(ssize_t level) override {
@@ -715,6 +714,40 @@ class InjectIntoStringAST : public ExprAST {
     std::print("InjectIntoStringAST\n");
 
     body->print_name(level + 1);
+  }
+  std::expected<llvm::Value*, std::string> codegen(
+      CodegenState& state) override;
+};
+
+class RedirectExprAST : public ExprAST {
+  std::unique_ptr<ExprAST> body;
+
+ public:
+  std::optional<std::unique_ptr<ExprAST>> in_file;
+  bool and_prefix = false;
+
+  bool and_suffix = false;
+  std::optional<std::unique_ptr<ExprAST>> out_file;
+
+  RedirectExprAST(std::unique_ptr<ExprAST> body) : body(std::move(body)) {}
+
+  void print_name(ssize_t level) override {
+    for (ssize_t i = 0; i < level - 1; i++) {
+      std::print(" ");
+    }
+    if (level != 0) {
+      std::print("|-");
+    }
+
+    std::print("RedirectExprAST {} {}\n", and_prefix, and_suffix);
+
+    if (in_file.has_value()) {
+      in_file.value()->print_name(level + 1);
+    }
+    body->print_name(level + 1);
+    if (out_file.has_value()) {
+      out_file.value()->print_name(level + 1);
+    }
   }
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;

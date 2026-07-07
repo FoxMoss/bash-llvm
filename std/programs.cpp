@@ -11,9 +11,12 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <iostream>
 #include <map>
 #include <optional>
+#include <ostream>
 #include <print>
+#include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
@@ -130,35 +133,45 @@ int bash_echo(void* var_mem, uint64_t argc, char** argv) {
 
   if (var_mem_usable->output_stack.size() == 0) return 1;
 
-  switch (
-      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].location) {
+  std::string output;
+
+  for (uint64_t i = 0; i < argc; i++) {
+    output += std::format("{}", argv[i]);
+    if (i != argc - 1 && i != argc - 1) {
+      output += " ";
+    }
+  }
+  output += "\n";
+
+  size_t bonus_newlines = 0;
+
+  for (char& iter : std::views::reverse(output)) {
+    if (iter != '\n') {
+      break;
+    }
+    bonus_newlines++;
+  }
+
+  output = output.substr(0, output.size() - (bonus_newlines - 1));
+
+  switch (var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+              .location) {
     case OutputFactor::OUTPUT_STDOUT:
-      for (uint64_t i = 0; i < argc; i++) {
-        std::print("{}", argv[i]);
-        if (i != argc - 1) {
-          std::print(" ");
-        }
-      }
-      std::println("");
+      std::print("{}", output);
+      std::flush(std::cout);
       break;
 
     case OutputFactor::OUTPUT_STR:
       if (!var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
                .storage.has_value()) {
-        var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].storage =
-            "";
+        var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+            .storage = "";
       }
 
       if (var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
               .storage.has_value()) {
-        for (uint64_t i = 0; i < argc; i++) {
-          var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
-              .storage.value() += argv[i];
-          if (i != argc - 1) {
-            var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
-                .storage.value() += " ";
-          }
-        }
+        var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+            .storage.value() += output;
       }
       break;
     case OutputFactor::OUTPUT_UNK:
@@ -228,8 +241,8 @@ int bash_printf(void* var_mem, uint64_t argc, char** argv) {
 
   if (var_mem_usable->output_stack.size() == 0) return 1;
 
-  switch (
-      var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].location) {
+  switch (var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+              .location) {
     case OutputFactor::OUTPUT_STDOUT:
       std::print("{}", out_string);
       break;
@@ -237,8 +250,8 @@ int bash_printf(void* var_mem, uint64_t argc, char** argv) {
     case OutputFactor::OUTPUT_STR:
       if (!var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
                .storage.has_value()) {
-        var_mem_usable->output_stack[var_mem_usable->output_stack_iterator].storage =
-            "";
+        var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
+            .storage = "";
       }
 
       var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]

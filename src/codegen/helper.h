@@ -38,4 +38,8 @@ std::expected<llvm::Value*, std::string> runtime_exit(CodegenState& state,
 std::expected<llvm::Value*, std::string> runtime_wait_two_pid(
     CodegenState& state, llvm::Value* pid1, llvm::Value* pid2);
 std::expected<llvm::Value*, std::string> runtime_expand_program_argument(
-    CodegenState& state, llvm::Value* argument) ;
+    CodegenState& state, llvm::Value* argument);
+std::expected<llvm::Value*, std::string> runtime_write_to_location(
+    CodegenState& state, llvm::Value* data, llvm::Value* data_len,
+    llvm::Value* file);
+

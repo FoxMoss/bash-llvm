@@ -534,4 +534,22 @@ char* expand_program_argument(void* var_mem, char* arg) {
 
   return strdup(expanded.c_str());
 }
+int write_to_location(void* var_mem, const char* data, size_t data_len,
+                      const char* file) {
+  FILE* fd;
+
+  // TODO: add append
+  if (!false) {
+    fd = fopen(file, "w");
+  } else {
+    fd = fopen(file, "a");
+  }
+  if (fd == nullptr) {
+    return 1;
+  }
+
+  fwrite(data, 1, data_len, fd);
+  fclose(fd);
+  return 0;
+}
 }

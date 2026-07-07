@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <expected>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <print>
@@ -32,6 +33,47 @@ std::optional<std::unique_ptr<ExprAST>> parse_paren_expression(
 
   get_next_segment(lexer_segments, cursor);  // eat )
   return std::move(body.value());
+}
+
+std::optional<std::unique_ptr<ExprAST>> parse_redirect_expression(
+    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor,
+    std::unique_ptr<ExprAST> body) noexcept {
+  auto current_segment = get_current_segment(lexer_segments, cursor);
+
+  auto ret = std::make_unique<RedirectExprAST>(std::move(body));
+
+  if (current_segment.has_value() && current_segment->token == TOK_AND) {
+    ret->and_prefix = true;
+    current_segment = get_next_segment(lexer_segments, cursor);
+  }
+
+  if (current_segment.has_value() && current_segment->token != TOK_GREATER) {
+    ret->in_file = parse_floating_arg(lexer_segments, cursor);
+
+    if (!ret->in_file.has_value()) {
+      RETURN_WITH_WARNING();
+    }
+  }
+
+  current_segment = get_next_segment(lexer_segments, cursor);  // eat >
+
+  if (current_segment.has_value() && current_segment->token == TOK_AND) {
+    ret->and_suffix = true;
+    current_segment = get_next_segment(lexer_segments, cursor);
+  }
+
+  // this is required
+  if (current_segment.has_value()) {
+    ret->out_file = parse_floating_arg(lexer_segments, cursor);
+    if (!ret->out_file.has_value()) {
+      RETURN_WITH_WARNING();
+    }
+
+  } else {
+    RETURN_WITH_WARNING();
+  }
+
+  return ret;
 }
 
 std::optional<std::unique_ptr<ExprAST>> parse_operator_math_expression(
@@ -713,10 +755,26 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
           UNEXPECTED_RETURN_WITH_WARNING();
         }
 
-        return_expr = std::make_unique<PipeExprAST >(
-             std::move(last_expr.value()),
+        return_expr = std::make_unique<PipeExprAST>(
+            std::move(last_expr.value()),
             std::move(righthandside.value().value()));
         last_expr = {};
+      } break;
+      case TOK_AND: {
+        auto next_op = peek_segment(lexer_segments, cursor);
+
+        if (next_op->token == TOK_GREATER) {
+          if (!last_expr.has_value()) {
+            UNEXPECTED_RETURN_WITH_MSG("redirection cannot be floating");
+          }
+
+          return_expr = parse_redirect_expression(lexer_segments, cursor,
+                                                  std::move(last_expr.value()));
+          last_expr = {};
+        } else {
+          // TODO: implement bg processes
+          UNEXPECTED_RETURN_WITH_WARNING();
+        }
       } break;
       case TOK_AND_AND: {
         if (!parse_ops) {
@@ -792,12 +850,26 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
 
         auto lookahead_cursor = cursor;
         get_next_segment(lexer_segments, lookahead_cursor);
-        skip_whitespace(lexer_segments, lookahead_cursor);
+
+        // with whitespace, because 1> is valid but 1 > is not
         auto next_tok = get_current_segment(lexer_segments, lookahead_cursor);
+        if (next_tok.has_value() && next_tok->token == TOK_GREATER) {
+          if (!last_expr.has_value()) {
+            UNEXPECTED_RETURN_WITH_MSG("redirection cannot be floating");
+          }
+
+          return_expr = parse_redirect_expression(lexer_segments, cursor,
+                                                  std::move(last_expr.value()));
+          last_expr = {};
+          break;
+        }
+
+        skip_whitespace(lexer_segments, lookahead_cursor);
+        next_tok = get_current_segment(lexer_segments, lookahead_cursor);
 
         if (next_tok.has_value() && next_tok->token == TOK_FUNC_INDICATOR) {
           if (!top_level) {
-            UNEXPECTED_RETURN_WITH_MSG("Function must be top level");
+            UNEXPECTED_RETURN_WITH_MSG("function must be top level");
           }
           cursor = lookahead_cursor;
 
@@ -838,6 +910,16 @@ parse_expression(const std::vector<BashLexerSegment>& lexer_segments,
         [[fallthrough]];
       case TOK_BACKTICK:
         return last_expr;
+
+      case TOK_GREATER: {
+        if (!last_expr.has_value()) {
+          UNEXPECTED_RETURN_WITH_MSG("redirection cannot be floating");
+        }
+
+        return_expr = parse_redirect_expression(lexer_segments, cursor,
+                                                std::move(last_expr.value()));
+        last_expr = {};
+      } break;
 
       case TOK_SEMI_COLON:
         [[fallthrough]];

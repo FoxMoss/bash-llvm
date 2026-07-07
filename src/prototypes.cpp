@@ -1,6 +1,7 @@
 
 #include "codegen.h"
 #include "jit.h"
+#include "llvm/IR/Constants.h"
 
 void CodegenState::generate_standard_library() {
 #define PROG_SYMBOL(symb) generate_prototype(#symb);
@@ -252,12 +253,27 @@ void CodegenState::generate_standard_library() {
                            "wait_two_pid", module.get());
   }
   {
-    std::vector<llvm::Type*> func_args = {llvm::PointerType::get(*this->context, 0), llvm::PointerType::get(*this->context, 0)};
+    std::vector<llvm::Type*> func_args = {
+        llvm::PointerType::get(*this->context, 0),
+        llvm::PointerType::get(*this->context, 0)};
 
     llvm::FunctionType* func_type = llvm::FunctionType::get(
         llvm::PointerType::get(*this->context, 0), func_args, false);
 
     llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                            "expand_program_argument", module.get());
+  }
+  {
+    std::vector<llvm::Type*> func_args = {
+        llvm::PointerType::get(*this->context, 0),
+        llvm::PointerType::get(*this->context, 0),
+        llvm::IntegerType::getInt64Ty(*this->context),
+        llvm::PointerType::get(*this->context, 0)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::IntegerType::getInt32Ty(*this->context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "write_to_location", module.get());
   }
 }
