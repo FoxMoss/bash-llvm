@@ -8,7 +8,10 @@
 #include <utility>
 
 #include "CLI/CLI.hpp"
+
+#ifdef USE_BELLADONNA
 #include "belladonna.h"
+#endif
 
 File::File(std::string contents) : d_contents(std::move(contents)) {}
 
@@ -23,10 +26,12 @@ int main(int argc, char* argv[]) {
     app.add_flag("-e,--disable-external", sandboxing.block_external_programs,
                  "Prevent script from running non-builtin commands");
 
+#ifdef USE_BELLADONNA
     app.add_flag(
         "-s,--root-sandbox", sandboxing.run_in_root_sanbox,
         "Run the program with root access but disable it from modifying files, "
         "instead creating a upatch.tar.gz patch file.");
+#endif
 
     std::string interpret_file;
     app.add_option("file", interpret_file, "Source file for interpreting");
@@ -64,6 +69,7 @@ int main(int argc, char* argv[]) {
       }
     } else {
       if (sandboxing.run_in_root_sanbox) {
+#ifdef USE_BELLADONNA
         auto sandbox = BelladonnaState::belladonna_create_sandbox();
 
         if (!sandbox.has_value()) {
@@ -87,6 +93,7 @@ int main(int argc, char* argv[]) {
         delete sandbox.value();
 
         return WEXITSTATUS(stat_loc);
+#endif
       } else {
         if (interpret_file.size() == 0) {
           bash_repl(debug_general, sandboxing);

@@ -24,6 +24,8 @@ if(USE_CCACHE)
     endif()
 endif()
 
+option(USE_BELLADONNA "Add root sandboxing" OFF)
+
 option(GNU_STD "Use libstdc++" OFF)
 
 if(GNU_STD)

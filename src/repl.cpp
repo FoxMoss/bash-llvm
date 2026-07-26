@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <memory>
 #include <print>
 #include <string>
@@ -65,10 +66,17 @@ static void completer(ic_completion_env_t* cenv, const char* prefix);
 
 static void highlighter(ic_highlight_env_t* henv, const char* input, void* arg);
 
+const std::string shorten_path(const std::string home, const std::string path) {
+  if (path.starts_with(home)) {
+    return std::format("~{}", path.substr(home.size(), -1));
+  }
+  return path;
+}
+
 void bash_repl(bool debug, SandboxingOptions sandboxing) {
   ic_style_def("kbd", "gray underline");
   ic_style_def("ic-prompt", catppuccin_mocha_theme["lavender"].c_str());
-  ic_set_prompt_marker("$ ", "> ");
+  ic_set_prompt_marker(" ", "> ");
 
   std::string home_path = "";
   if (getenv("HOME") != nullptr) {
@@ -114,8 +122,18 @@ void bash_repl(bool debug, SandboxingOptions sandboxing) {
   std::string pwd_key = "PWD";
   std::string path = std::filesystem::current_path();
 
+  const std::string prompt_bg = "69;71;80";
+  const std::string prompt_fg = "205;214;244";
+
   char* input;
-  while ((input = ic_readline(path.c_str())) != nullptr) {
+  while ((input = ic_readline(std::format("\e[48;2;{0}m\e[38;2;{1}m {2} "
+                                          "\e[49m\e[38;2;{0}m\e[49m\e[39m",
+                                          prompt_bg, prompt_fg,
+                                          shorten_path(home_path, path))
+                                  .c_str())) != nullptr) {
+    ic_term_writef("\e]0;%s\a", input);
+    ic_term_flush();
+
     store_variable_memory(var_mem, pwd_key.c_str(), pwd_key.size(),
                           path.c_str(), path.size());
     size_t cursor = 0;
@@ -210,6 +228,9 @@ void bash_repl(bool debug, SandboxingOptions sandboxing) {
 
     path = std::filesystem::current_path();
     free(input);
+
+    ic_term_writef("\e]0;%s\a", shorten_path(home_path, path).c_str());
+    ic_term_flush();
   }
 
   free_ts(ts_state);

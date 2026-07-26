@@ -18,12 +18,13 @@ CPMAddPackage(
   URI "gh:CLIUtils/CLI11@2.6.2"
 )
 
-CPMAddPackage(
-  URI "gh:FoxMoss/belladonna#b4ac652"
-  OPTIONS "CMAKE_CXX_FLAGS ${FUSE_INCLUDE} -O3 -DFUSE_USE_VERSION=317"
-  "CMAKE_C_FLAGS ${FUSE_INCLUDE} -O3 -DFUSE_USE_VERSION=317"
-
-)
+if(USE_BELLADONNA)
+  CPMAddPackage(
+    URI "gh:FoxMoss/belladonna#b4ac652"
+    OPTIONS "CMAKE_CXX_FLAGS ${FUSE_INCLUDE} -O3 -DFUSE_USE_VERSION=317"
+    "CMAKE_C_FLAGS ${FUSE_INCLUDE} -O3 -DFUSE_USE_VERSION=317"
+  )
+endif()
 
 CPMAddPackage(
   URI "gh:daanx/isocline@1.1.0"
@@ -79,7 +80,12 @@ target_precompile_headers(llsh
 target_compile_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 target_link_options(llsh PRIVATE -Wall -Wextra -Wpedantic)
 
-list(APPEND LINKED_LIBRARIES isocline CLI11::CLI11 tree-sitter-bash tree-sitter ${REL_EXTERNAL_SOURCES} belladonna)
+if(USE_BELLADONNA)
+  list(APPEND REL_EXTERNAL_SOURCES belladonna)
+  target_compile_definitions(USE_BELLADONNA)
+endif()
+
+list(APPEND LINKED_LIBRARIES isocline CLI11::CLI11 tree-sitter-bash tree-sitter ${REL_EXTERNAL_SOURCES})
 
 target_link_libraries(llsh ${LINKED_LIBRARIES})
 target_include_directories(llsh PRIVATE .)
@@ -92,5 +98,7 @@ add_custom_command(TARGET llsh POST_BUILD
 
 install(TARGETS llsh DESTINATION bin)
 
-install(TARGETS belladonna DESTINATION lib)
+if(USE_BELLADONNA)
+  install(TARGETS belladonna DESTINATION lib)
+endif()
 
