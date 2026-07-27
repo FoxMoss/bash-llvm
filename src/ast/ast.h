@@ -36,13 +36,17 @@ class ExprAST {
 
   virtual std::optional<std::string> get_ident_str() { return {}; }
   virtual std::vector<std::string> get_functions_defined() { return {}; }
+  virtual bool is_preformed() { return true; }
 };
 
 class StringExprAST : public ExprAST {
+ private:
+  bool preformed = false;  // was constructed with "" or similar
  public:
   std::string val;
 
-  StringExprAST(std::string val) : val(std::move(val)) {}
+  StringExprAST(std::string val, bool preformed = false)
+      : val(std::move(val)), preformed(preformed) {}
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
       std::print(" ");
@@ -50,8 +54,10 @@ class StringExprAST : public ExprAST {
     if (level != 0) {
       std::print("|-");
     }
-    std::print("StringExprAST \"{}\"\n", val);
+    std::print("StringExprAST \"{}\" preformed={}\n", val, preformed);
   }
+
+  bool is_preformed() override { return preformed; }
 
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
@@ -650,10 +656,13 @@ class CaseExprAST : public ExprAST {
 class ConcatStringsAST : public ExprAST {
   std::unique_ptr<ExprAST> str1;
   std::unique_ptr<ExprAST> str2;
+  bool preformed;
 
  public:
   ConcatStringsAST(std::unique_ptr<ExprAST> str1, std::unique_ptr<ExprAST> str2)
-      : str1(std::move(str1)), str2(std::move(str2)) {}
+      : str1(std::move(str1)),
+        str2(std::move(str2)),
+        preformed(this->str1->is_preformed() || this->str2->is_preformed()) {}
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -663,11 +672,14 @@ class ConcatStringsAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("ConcatStringsAST\n");
+    std::print("ConcatStringsAST preformed={}\n", preformed);
 
     str1->print_name(level + 1);
     str2->print_name(level + 1);
   }
+
+  bool is_preformed() override { return preformed; }
+
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
 };

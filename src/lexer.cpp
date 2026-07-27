@@ -212,7 +212,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
         escaping = false;
       } else {
         if (current_char == '$' && !escaping) {
-          ret.emplace_back(TOK_VALUE, inner_text);
+          ret.emplace_back(TOK_VALUE, inner_text, true);
           inner_text.clear();
 
           auto next_char = peek_char(source, cursor);
@@ -248,7 +248,7 @@ std::vector<BashLexerSegment> BashLexerSegment::munch_token(
         }
       }
     } while (!(current_char == start_char && !escaping));
-    ret.emplace_back(TOK_VALUE, inner_text);
+    ret.emplace_back(TOK_VALUE, inner_text, true);
 
     return ret;
   } else if (current_char == '=') {

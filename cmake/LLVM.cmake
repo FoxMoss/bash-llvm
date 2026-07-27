@@ -162,7 +162,6 @@ if(TRIPLET STREQUAL "x86_64-linux-gnu")
   include_directories(${fuse-dev_SOURCE_DIR}/include/fuse3/)
   set(FUSE_INCLUDE "-I${fuse-dev_SOURCE_DIR}/include/fuse3/")
 
-
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/lib/")
   foreach(SOFILE ${EXTERNAL_SOURCES})
     get_filename_component(SOFILE_BARE ${SOFILE} NAME)

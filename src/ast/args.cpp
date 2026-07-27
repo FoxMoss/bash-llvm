@@ -10,8 +10,8 @@
 #include <vector>
 
 #include "ast.h"
-#include "lexer.h"
 #include "helper.h"
+#include "lexer.h"
 
 std::optional<std::unique_ptr<ExprAST>> parse_curly_expression(
     const std::vector<BashLexerSegment>& lexer_segments,
@@ -104,7 +104,8 @@ std::optional<std::unique_ptr<ExprAST>> parse_curly_expression(
 
 // can never return an array
 std::optional<std::unique_ptr<ExprAST>> parse_floating_arg(
-    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) noexcept {
+    const std::vector<BashLexerSegment>& lexer_segments,
+    size_t& cursor) noexcept {
   auto current_segment = get_current_segment(lexer_segments, cursor);
   if (!current_segment.has_value()) {
     return {};
@@ -123,7 +124,8 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_arg(
     default:
       [[fallthrough]];
     case TOK_VALUE: {
-      auto val = std::make_unique<StringExprAST>(current_segment->str);
+      auto val = std::make_unique<StringExprAST>(
+          current_segment->str, current_segment->was_in_quotes);
       get_next_segment(lexer_segments, cursor);
       return val;
     } break;
@@ -169,7 +171,8 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_arg(
 }
 
 std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
-    const std::vector<BashLexerSegment>& lexer_segments, size_t& cursor) noexcept {
+    const std::vector<BashLexerSegment>& lexer_segments,
+    size_t& cursor) noexcept {
   std::optional<BashLexerSegment> current_segment;
   bool done = false;
 

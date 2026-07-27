@@ -39,10 +39,15 @@ class BashLexerSegment {
  public:
   BashLexerSegment(BashLexerToken token, std::string str)
       : token(token), str(std::move(str)) {}
+
+  BashLexerSegment(BashLexerToken token, std::string str, bool was_in_quotes)
+      : token(token), str(std::move(str)), was_in_quotes(was_in_quotes) {}
+
   ~BashLexerSegment() = default;
 
   BashLexerToken token;
   std::string str;
+  bool was_in_quotes = false;
 
   std::string get_token_name();
   int16_t get_token_precidence();

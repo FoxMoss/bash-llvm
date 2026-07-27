@@ -1,0 +1,2 @@
+echo "~/Downloads/"
+echo ~/Downloads/

@@ -1,5 +1,6 @@
 #include "main.h"
 
+#include <glob.h>  // this should be good on mac and linux
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -514,26 +515,52 @@ int wait_two_pid(void* var_mem, int pid1, int pid2) {
   return 0;
 }
 
-char* expand_program_argument(void* var_mem, char* arg) {
-  const auto arg_str = std::string(arg);
-  if (!arg_str.starts_with("~/")) {
-    return strdup(arg);
+uint32_t convert_to_argc(void* var_mem, int argc, char** argv) {
+  uint32_t ret = 0;
+  for (uint32_t i = 0; i < argc; i++) {
+    if (argv[i] != nullptr) {
+      ret++;
+    } else {
+      char** inner_ptr = (char**)argv[i];
+    }
   }
-
-  const auto last_half = arg_str.substr(2, -1);
-
-  const std::string home_key = "HOME";
-
-  auto home_path = std::string(
-      get_variable_memory(var_mem, home_key.c_str(), home_key.size()));
-  if (home_path.empty()) {
-    home_path = "/";
-  }
-
-  auto expanded = home_path + "/" + last_half;
-
-  return strdup(expanded.c_str());
 }
+
+char** expand_program_argument(void* var_mem, char* arg) {
+  const auto arg_str = std::string(arg);
+
+  std::string expanded_home;
+
+  if (!arg_str.starts_with("~/")) {
+    expanded_home = arg;
+  } else {
+    const auto last_half = arg_str.substr(2, -1);
+
+    const std::string home_key = "HOME";
+
+    auto home_path = std::string(
+        get_variable_memory(var_mem, home_key.c_str(), home_key.size()));
+    if (home_path.empty()) {
+      home_path = "/";
+    }
+
+    expanded_home = home_path + "/" + last_half;
+  }
+
+  glob_t glob_buf;
+
+  glob(expanded_home.c_str(), 0, nullptr, &glob_buf);
+
+  char** return_array = (char**)malloc((glob_buf.gl_pathc + 1) * sizeof(char*));
+
+  memcpy((void*)return_array, (void*)glob_buf.gl_pathv,
+         glob_buf.gl_pathc * sizeof(char*));
+
+  return_array[glob_buf.gl_pathc] = nullptr;
+
+  return return_array;
+}
+
 int write_to_location(void* var_mem, const char* data, size_t data_len,
                       const char* file) {
   FILE* fd;
