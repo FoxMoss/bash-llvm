@@ -45,6 +45,7 @@ std::expected<llvm::Value*, std::string> IdentifierExprAST::codegen(
   return get_variable_memory(state, name);
 }
 
+/*
 std::expected<llvm::Value*, std::string> expand_args(CodegenState& state,
                                                      llvm::Value* array) {
   std::vector<llvm::Constant*> values_llvm;
@@ -92,6 +93,8 @@ std::expected<llvm::Value*, std::string> expand_args(CodegenState& state,
 
   return val.value();
 }
+*/
+
 std::expected<llvm::Value*, std::string> CallExprAST::codegen(
     CodegenState& state) {
   llvm::Function* program_called =
@@ -137,141 +140,19 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
         state.builder->GetInsertBlock()->getDataLayout().getPrefTypeAlign(
             llvm::PointerType::get(*state.context, 0));
 
-    /* once again writing llvm ir is not smart when you can just write a
-    standard library function, this stands as a warning against the obvious
-
-    {
-      llvm::Function* parent_func =
-          state.builder->GetInsertBlock()->getParent();
-      llvm::BasicBlock* header = llvm::BasicBlock::Create(
-          *state.context, "arg_stacker.header", parent_func);
-      llvm::BasicBlock* check = llvm::BasicBlock::Create(
-          *state.context, "arg_stacker.check", parent_func);
-      llvm::BasicBlock* singular =
-          llvm::BasicBlock::Create(*state.context, "arg_stacker.singluar");
-      llvm::BasicBlock* multi =
-          llvm::BasicBlock::Create(*state.context, "arg_stacker.multi");
-      llvm::BasicBlock* merge =
-          llvm::BasicBlock::Create(*state.context, "arg_stacker.merge");
-
-      auto prev_block = state.builder->GetInsertBlock();
-
-      state.builder->CreateBr(header);
-      state.builder->SetInsertPoint(header);
-
-      llvm::PHINode* stack_size =
-          llvm::PHINode::Create(llvm::Type::getInt64Ty(*state.context), 3);
-      stack_size->addIncoming(
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 0),
-          prev_block);
-
-      llvm::PHINode* vector_iter =
-          llvm::PHINode::Create(llvm::Type::getInt64Ty(*state.context), 3);
-      vector_iter->addIncoming(
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 0),
-          prev_block);
-
-      auto in_vector_bounds = state.builder->CreateICmpULT(
-          vector_iter,
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
-                                 args_array_type->getNumElements()));
-
-      state.builder->CreateCondBr(in_vector_bounds, check, merge);
-      state.builder->SetInsertPoint(check);
-      parent_func->insert(parent_func->end(), check);
-
-      auto ptr = state.builder->CreateExtractElement(args_array, vector_iter);
-
-      // auto not_a_multi_arg = state.builder->CreateIsNotNull(ptr);
-      // state.builder->CreateCondBr(not_a_multi_arg, singular, multi);
-
-       state.builder->CreateBr(, singular, multi);
-      state.builder->SetInsertPoint(singular);
-      parent_func->insert(parent_func->end(), singular);
-
-      auto singular_stack_size = state.builder->CreateAdd(
-          stack_size,
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1));
-
-      stack_size->addIncoming(singular_stack_size, singular);
-
-      auto singular_vector_iter = state.builder->CreateAdd(
-          vector_iter,
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1));
-
-      vector_iter->addIncoming(singular_vector_iter, singular);
-
-      state.builder->CreateBr(header);
-
-      state.builder->SetInsertPoint(multi);
-      parent_func->insert(parent_func->end(), multi);
-
-      auto multi_vector_iter = state.builder->CreateAdd(
-          vector_iter,
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1));
-
-      auto array_ptr =
-          state.builder->CreateExtractElement(args_array, multi_vector_iter);
-
-      llvm::BasicBlock* multi_loop =
-          llvm::BasicBlock::Create(*state.context, "arg_stacker.multi_loop");
-      llvm::BasicBlock* multi_merge =
-          llvm::BasicBlock::Create(*state.context, "arg_stacker.multi_merge");
-
-      state.builder->CreateBr(multi_loop);
-      state.builder->SetInsertPoint(multi_loop);
-      parent_func->insert(parent_func->end(), multi_loop);
-
-      llvm::PHINode* rolling_ptr =
-          state.builder->CreatePHI(llvm::PointerType::get(*state.context, 0), 2,
-                                   "arg_stacker.rolling_ptr");
-      rolling_ptr->addIncoming(array_ptr, multi);
-
-      llvm::PHINode* next_multi_stack_size =
-          state.builder->CreatePHI(llvm::Type::getInt64Ty(*state.context), 2,
-                                   "arg_stacker.next_multi_stack_size");
-      next_multi_stack_size->addIncoming(stack_size, multi);
-
-      auto inner_ptr = state.builder->CreateAlignedLoad(
-          llvm::PointerType::get(*state.context, 0), rolling_ptr,
-          prefered_align);
-      auto not_null = state.builder->CreateIsNotNull(inner_ptr);
-
-      auto ptr_size =
-          state.module->getDataLayout().getAddressSize(0);  // sizeof(char*)
-
-      auto next_rolling_ptr = state.builder->CreateAdd(
-          rolling_ptr, llvm::ConstantInt::get(
-                           llvm::Type::getInt64Ty(*state.context), ptr_size));
-
-      auto next_next_multi_stack_size = state.builder->CreateAdd(
-          next_multi_stack_size,
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 1));
-
-      rolling_ptr->addIncoming(next_rolling_ptr, multi_loop);
-
-      state.builder->CreateCondBr(not_null, multi_loop, multi_merge);
-      state.builder->SetInsertPoint(multi_merge);
-      parent_func->insert(parent_func->end(), multi_merge);
-
-      auto multi_next_vector_iter = state.builder->CreateAdd(
-          vector_iter,
-          llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context), 2));
-      stack_size->addIncoming(next_next_multi_stack_size, multi_merge);
-      vector_iter->addIncoming(multi_next_vector_iter, multi_merge);
-
-      state.builder->CreateBr(header);
-      state.builder->SetInsertPoint(merge);
-      parent_func->insert(parent_func->end(), merge);
-    }
-    */
-
     auto stack_args = state.builder->CreateAlloca(
         llvm::PointerType::get(*state.context, 0),
         llvm::ConstantInt::get(llvm::Type::getInt64Ty(*state.context),
                                args_array_type->getNumElements()));
 
     state.builder->CreateAlignedStore(args_array, stack_args, prefered_align);
+
+    auto expanded_args = runtime_expand_argv(state, llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(*state.context),
+                                 args_array_type->getNumElements()), stack_args);
+    UNWRAP_EXPECTED(expanded_args)
+    
+    auto expanded_args_count = runtime_count_argv(state, expanded_args.value());
+    UNWRAP_EXPECTED(expanded_args_count)
 
     if (!state.named_values["variable_memory"].has_value()) {
       return std::unexpected("Variable map does not exist");
@@ -281,16 +162,14 @@ std::expected<llvm::Value*, std::string> CallExprAST::codegen(
       arg_values = {
           state.named_values["variable_memory"].value(),
           state.builder->CreateGlobalString(program),
-          llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(*state.context),
-                                 args_array_type->getNumElements()),
-          stack_args};
+          expanded_args_count.value(),
+          expanded_args.value()};
 
     } else {
       arg_values = {
           state.named_values["variable_memory"].value(),
-          llvm::ConstantInt::get(llvm::IntegerType::getInt64Ty(*state.context),
-                                 args_array_type->getNumElements()),
-          stack_args};
+          expanded_args_count.value(),
+          expanded_args.value()};
     }
   } else {
     if (external_program) {
@@ -661,18 +540,15 @@ std::expected<llvm::Value*, std::string> ConvertToArrayExprAST::codegen(
   auto val_val = val->codegen(state);
   UNWRAP_EXPECTED(val_val)
 
-  if (!val->is_preformed()) {
-    auto expanded_args =
-        runtime_expand_program_argument(state, val_val.value());
-
+  if (!val->is_preformed()) {  // mark to be expanded where memory will disapear
     auto expand_marker = state.builder->CreateInsertElement(
         llvm::VectorType::get(llvm::PointerType::get(*state.context, 0),
                               llvm::ElementCount::get(2, false)),
         llvm::Constant::getNullValue(llvm::PointerType::get(*state.context, 0)),
         uint64_t{0});
 
-    return state.builder->CreateInsertElement(
-        expand_marker, expanded_args.value(), uint64_t{1});
+    return state.builder->CreateInsertElement(expand_marker, val_val.value(),
+                                              uint64_t{1});
   }
 
   return state.builder->CreateInsertElement(

@@ -18,7 +18,7 @@ enum OptimizationFlag {
                                 OptimizationFlag opt_flag, bool debug_lexer,
                                 bool debug_ast, SandboxingOptions sandboxing,
                                 std::optional<std::string> ir_file);
-void bash_repl(bool debug, SandboxingOptions sandboxing);
+void bash_repl(bool debug, SandboxingOptions sandboxing, bool nice_shell);
 
 void bash_interpret(std::string file_name, bool debug,
                     SandboxingOptions sandboxing);

@@ -73,7 +73,24 @@ const std::string shorten_path(const std::string home, const std::string path) {
   return path;
 }
 
-void bash_repl(bool debug, SandboxingOptions sandboxing) {
+std::string get_shell_prompt(std::string home_path, std::string path,
+                             bool nice_shell) {
+  std::string promt_str = "";
+
+  if (nice_shell) {
+    const std::string prompt_bg = "69;71;80";
+    const std::string prompt_fg = "205;214;244";
+    promt_str = std::format(
+        "\e[48;2;{0}m\e[38;2;{1}m {2} "
+        "\e[49m\e[38;2;{0}m\e[49m\e[39m",
+        prompt_bg, prompt_fg, shorten_path(home_path, path));
+  } else {
+    promt_str = std::format("{}$", shorten_path(home_path, path));
+  }
+  return promt_str;
+}
+
+void bash_repl(bool debug, SandboxingOptions sandboxing, bool nice_shell) {
   ic_style_def("kbd", "gray underline");
   ic_style_def("ic-prompt", catppuccin_mocha_theme["lavender"].c_str());
   ic_set_prompt_marker(" ", "> ");
@@ -122,15 +139,10 @@ void bash_repl(bool debug, SandboxingOptions sandboxing) {
   std::string pwd_key = "PWD";
   std::string path = std::filesystem::current_path();
 
-  const std::string prompt_bg = "69;71;80";
-  const std::string prompt_fg = "205;214;244";
-
   char* input;
-  while ((input = ic_readline(std::format("\e[48;2;{0}m\e[38;2;{1}m {2} "
-                                          "\e[49m\e[38;2;{0}m\e[49m\e[39m",
-                                          prompt_bg, prompt_fg,
-                                          shorten_path(home_path, path))
-                                  .c_str())) != nullptr) {
+  while ((input = ic_readline(
+              get_shell_prompt(home_path, path, nice_shell).c_str())) !=
+         nullptr) {
     ic_term_writef("\e]0;%s\a", input);
     ic_term_flush();
 

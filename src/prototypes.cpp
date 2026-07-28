@@ -255,13 +255,25 @@ void CodegenState::generate_standard_library() {
   {
     std::vector<llvm::Type*> func_args = {
         llvm::PointerType::get(*this->context, 0),
+        llvm::Type::getInt32Ty(*context),
         llvm::PointerType::get(*this->context, 0)};
 
     llvm::FunctionType* func_type = llvm::FunctionType::get(
         llvm::PointerType::get(*this->context, 0), func_args, false);
 
     llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
-                           "expand_program_argument", module.get());
+                           "expand_argv", module.get());
+  }
+  {
+    std::vector<llvm::Type*> func_args = {
+        llvm::PointerType::get(*this->context, 0),
+        llvm::PointerType::get(*this->context, 0)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::Type::getInt32Ty(*context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
+                           "count_argv", module.get());
   }
   {
     std::vector<llvm::Type*> func_args = {

@@ -437,23 +437,44 @@ std::expected<llvm::Value*, std::string> runtime_wait_two_pid(
   return state.builder->CreateCall(program_called, arg_values);
 }
 
-std::expected<llvm::Value*, std::string> runtime_expand_program_argument(
-    CodegenState& state, llvm::Value* argument) {
+std::expected<llvm::Value*, std::string> runtime_expand_argv(
+    CodegenState& state, llvm::Value* argc, llvm::Value* argv) {
   llvm::Function* program_called =
-      state.module->getFunction("expand_program_argument");
+      state.module->getFunction("expand_argv");
   if (!program_called)
-    return std::unexpected("expand_program_argument not defined");
+    return std::unexpected("expand_argv not defined");
 
   // If argument mismatch error.
-  if (program_called->arg_size() != 2)
-    return std::unexpected("Func expand_program_argument is illdefined");
+  if (program_called->arg_size() != 3)
+    return std::unexpected("Func expand_argv  is illdefined");
 
   if (!state.named_values["variable_memory"].has_value()) {
     return std::unexpected("Variable map does not exist");
   }
 
   std::vector<llvm::Value*> arg_values = {
-      state.named_values["variable_memory"].value(), argument};
+      state.named_values["variable_memory"].value(), argc, argv};
+
+  return state.builder->CreateCall(program_called, arg_values);
+}
+
+std::expected<llvm::Value*, std::string> runtime_count_argv(
+    CodegenState& state, llvm::Value* argv) {
+  llvm::Function* program_called =
+      state.module->getFunction("count_argv");
+  if (!program_called)
+    return std::unexpected("count_argv not defined");
+
+  // If argument mismatch error.
+  if (program_called->arg_size() != 2)
+    return std::unexpected("Func count_argv is illdefined");
+
+  if (!state.named_values["variable_memory"].has_value()) {
+    return std::unexpected("Variable map does not exist");
+  }
+
+  std::vector<llvm::Value*> arg_values = {
+      state.named_values["variable_memory"].value(), argv};
 
   return state.builder->CreateCall(program_called, arg_values);
 }

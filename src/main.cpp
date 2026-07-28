@@ -20,7 +20,11 @@ int main(int argc, char* argv[]) {
     CLI::App app{"LLVM Bash compiler"};
 
     bool debug_general = false;
-    app.add_flag("--debug", debug_general, "Print debug info to console");
+    app.add_flag("-d,--debug", debug_general, "Print debug info to console");
+
+    bool nice_shell = false;
+    app.add_flag("-n,--nice-shell", nice_shell,
+                 "Use nerd fonts and kitty extras for some eyecandy");
 
     SandboxingOptions sandboxing;
     app.add_flag("-e,--disable-external", sandboxing.block_external_programs,
@@ -80,7 +84,7 @@ int main(int argc, char* argv[]) {
         auto sandbox_pid = sandbox.value()->fork_into();
         if (sandbox_pid == 0) {
           if (interpret_file.size() == 0) {
-            bash_repl(debug_general, sandboxing);
+            bash_repl(debug_general, sandboxing, nice_shell);
             exit(0);
           }
           bash_interpret(interpret_file, debug_general, sandboxing);
@@ -96,7 +100,7 @@ int main(int argc, char* argv[]) {
 #endif
       } else {
         if (interpret_file.size() == 0) {
-          bash_repl(debug_general, sandboxing);
+          bash_repl(debug_general, sandboxing, nice_shell);
           return 0;
         }
         bash_interpret(interpret_file, debug_general, sandboxing);

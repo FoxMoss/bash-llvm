@@ -43,3 +43,7 @@ std::expected<llvm::Value*, std::string> runtime_write_to_location(
     CodegenState& state, llvm::Value* data, llvm::Value* data_len,
     llvm::Value* file);
 
+std::expected<llvm::Value*, std::string> runtime_count_argv(CodegenState& state,
+                                                            llvm::Value* argv);
+std::expected<llvm::Value*, std::string> runtime_expand_argv(
+    CodegenState& state, llvm::Value* argc, llvm::Value* argv);

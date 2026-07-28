@@ -42,6 +42,42 @@ std::vector<std::string> colapse_enviroment(void* var_mem) {
   return ret;
 }
 
+std::vector<std::string> expand_program_argument(void* var_mem, char* arg) {
+  const auto arg_str = std::string(arg);
+
+  std::string expanded_home;
+
+  if (!arg_str.starts_with("~/")) {
+    expanded_home = arg;
+  } else {
+    const auto last_half = arg_str.substr(2, -1);
+
+    const std::string home_key = "HOME";
+
+    auto home_path = std::string(
+        get_variable_memory(var_mem, home_key.c_str(), home_key.size()));
+    if (home_path.empty()) {
+      home_path = "/";
+    }
+
+    expanded_home = home_path + "/" + last_half;
+  }
+
+  glob_t glob_buf;
+
+  glob(expanded_home.c_str(), 0, nullptr, &glob_buf);
+
+  std::vector<std::string> ret;
+
+  for (size_t i = 0; i < glob_buf.gl_pathc; i++) {
+    ret.emplace_back(glob_buf.gl_pathv[i]);
+  }
+
+  globfree(&glob_buf);
+
+  return ret;
+}
+
 extern "C" {
 
 bool get_shell_opt(void* var_mem, const char* arg) {
@@ -515,50 +551,38 @@ int wait_two_pid(void* var_mem, int pid1, int pid2) {
   return 0;
 }
 
-uint32_t convert_to_argc(void* var_mem, int argc, char** argv) {
-  uint32_t ret = 0;
-  for (uint32_t i = 0; i < argc; i++) {
-    if (argv[i] != nullptr) {
-      ret++;
-    } else {
-      char** inner_ptr = (char**)argv[i];
-    }
+int count_argv(void* var_mem, char** argv) {
+  int count = 0;
+  while (*argv != nullptr) {
+    argv++;
+    count++;
   }
+  return count;
 }
 
-char** expand_program_argument(void* var_mem, char* arg) {
-  const auto arg_str = std::string(arg);
+char** expand_argv(void* var_mem, int argc, char** argv) {
+  std::vector<std::string> ret;
 
-  std::string expanded_home;
-
-  if (!arg_str.starts_with("~/")) {
-    expanded_home = arg;
-  } else {
-    const auto last_half = arg_str.substr(2, -1);
-
-    const std::string home_key = "HOME";
-
-    auto home_path = std::string(
-        get_variable_memory(var_mem, home_key.c_str(), home_key.size()));
-    if (home_path.empty()) {
-      home_path = "/";
+  for (uint32_t i = 0; i < argc; i++) {
+    if (argv[i] != nullptr) {
+      ret.emplace_back(argv[i]);
+    } else {
+      i++;
+      auto paths = expand_program_argument(var_mem, argv[i]);
+      ret.insert(ret.end(), paths.begin(), paths.end());
     }
-
-    expanded_home = home_path + "/" + last_half;
   }
 
-  glob_t glob_buf;
+  char** ret_argv = (char**)malloc(sizeof(char*) * (ret.size() + 1));
+  size_t i = 0;
+  for (auto str : ret) {
+    ret_argv[i] = strdup(str.c_str());
+    i++;
+  }
 
-  glob(expanded_home.c_str(), 0, nullptr, &glob_buf);
+  ret_argv[ret.size()] = nullptr;
 
-  char** return_array = (char**)malloc((glob_buf.gl_pathc + 1) * sizeof(char*));
-
-  memcpy((void*)return_array, (void*)glob_buf.gl_pathv,
-         glob_buf.gl_pathc * sizeof(char*));
-
-  return_array[glob_buf.gl_pathc] = nullptr;
-
-  return return_array;
+  return ret_argv;
 }
 
 int write_to_location(void* var_mem, const char* data, size_t data_len,
