@@ -22,6 +22,10 @@
 #include "main.h"
 #include "treesitter.h"
 
+const uint8_t image_data[] = {
+#embed "../repllogo.png"
+};
+
 struct TSState {
   TSParser* parser;
   TSTree* tree;
@@ -62,7 +66,6 @@ void free_ts(void* ts_state_raw) {
   ts_parser_delete(ts_state->parser);
   free(ts_state_raw);
 }
-static void completer(ic_completion_env_t* cenv, const char* prefix);
 
 static void highlighter(ic_highlight_env_t* henv, const char* input, void* arg);
 
@@ -72,6 +75,64 @@ const std::string shorten_path(const std::string home, const std::string path) {
   }
   return path;
 }
+
+// https://github.com/zhicheng/base64/blob/master/base64.c
+#define BASE64_PAD '='
+static const char base64en[] = {
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+    'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/',
+};
+unsigned int base64_encode(const unsigned char* in, unsigned int inlen,
+                           char* out) {
+  int s;
+  unsigned int i;
+  unsigned int j;
+  unsigned char c;
+  unsigned char l;
+
+  s = 0;
+  l = 0;
+  for (i = j = 0; i < inlen; i++) {
+    c = in[i];
+
+    switch (s) {
+      case 0:
+        s = 1;
+        out[j++] = base64en[(c >> 2) & 0x3F];
+        break;
+      case 1:
+        s = 2;
+        out[j++] = base64en[((l & 0x3) << 4) | ((c >> 4) & 0xF)];
+        break;
+      case 2:
+        s = 0;
+        out[j++] = base64en[((l & 0xF) << 2) | ((c >> 6) & 0x3)];
+        out[j++] = base64en[c & 0x3F];
+        break;
+    }
+    l = c;
+  }
+
+  switch (s) {
+    case 1:
+      out[j++] = base64en[(l & 0x3) << 4];
+      out[j++] = BASE64_PAD;
+      out[j++] = BASE64_PAD;
+      break;
+    case 2:
+      out[j++] = base64en[(l & 0xF) << 2];
+      out[j++] = BASE64_PAD;
+      break;
+  }
+
+  out[j] = 0;
+
+  return j;
+}
+#define BASE64_ENCODE_OUT_SIZE(s) ((unsigned int)((((s) + 2) / 3) * 4 + 1))
 
 std::string get_shell_prompt(std::string home_path, std::string path,
                              bool nice_shell) {
@@ -91,6 +152,22 @@ std::string get_shell_prompt(std::string home_path, std::string path,
 }
 
 void bash_repl(bool debug, SandboxingOptions sandboxing, bool nice_shell) {
+  if (nice_shell) {
+    std::array<uint8_t, BASE64_ENCODE_OUT_SIZE(sizeof(image_data))>
+        base64_encoded;
+
+    base64_encode(image_data, sizeof(image_data), (char*)base64_encoded.data());
+
+    for (size_t i = 0; i < base64_encoded.size(); i += 4096) {
+      auto write_size = std::min(base64_encoded.size() - i, (size_t)4096);
+      std::print("\e_G{}m={};", i == 0 ? "a=T,f=100," : "",
+                 write_size < 4096 ? 0 : 1);
+      fwrite(base64_encoded.data() + i, 1, write_size, stdout);
+      std::print("\e\\");
+    }
+    std::print("\n");
+  }
+
   ic_style_def("kbd", "gray underline");
   ic_style_def("ic-prompt", catppuccin_mocha_theme["lavender"].c_str());
   ic_set_prompt_marker(" ", "> ");
@@ -246,10 +323,6 @@ void bash_repl(bool debug, SandboxingOptions sandboxing, bool nice_shell) {
   }
 
   free_ts(ts_state);
-}
-
-static void completer(ic_completion_env_t* cenv, const char* input) {
-  ic_complete_filename(cenv, input, 0, ".", nullptr);
 }
 
 static void highlighter(ic_highlight_env_t* henv, const char* input,

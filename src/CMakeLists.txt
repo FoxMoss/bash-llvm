@@ -40,6 +40,7 @@ add_executable(llsh
  compiler.cpp
  interpret.cpp
  whereami.cpp
+ completions.cpp
  ast/ast.cpp
  ast/args.cpp
  ast/helper.cpp

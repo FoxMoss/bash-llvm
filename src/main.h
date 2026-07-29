@@ -18,6 +18,9 @@ enum OptimizationFlag {
                                 OptimizationFlag opt_flag, bool debug_lexer,
                                 bool debug_ast, SandboxingOptions sandboxing,
                                 std::optional<std::string> ir_file);
+
+using ic_completion_env_t = struct ic_completion_env_s;
+void completer(ic_completion_env_t* cenv, const char* prefix);
 void bash_repl(bool debug, SandboxingOptions sandboxing, bool nice_shell);
 
 void bash_interpret(std::string file_name, bool debug,

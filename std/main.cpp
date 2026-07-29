@@ -43,29 +43,9 @@ std::vector<std::string> colapse_enviroment(void* var_mem) {
 }
 
 std::vector<std::string> expand_program_argument(void* var_mem, char* arg) {
-  const auto arg_str = std::string(arg);
-
-  std::string expanded_home;
-
-  if (!arg_str.starts_with("~/")) {
-    expanded_home = arg;
-  } else {
-    const auto last_half = arg_str.substr(2, -1);
-
-    const std::string home_key = "HOME";
-
-    auto home_path = std::string(
-        get_variable_memory(var_mem, home_key.c_str(), home_key.size()));
-    if (home_path.empty()) {
-      home_path = "/";
-    }
-
-    expanded_home = home_path + "/" + last_half;
-  }
-
   glob_t glob_buf;
 
-  glob(expanded_home.c_str(), 0, nullptr, &glob_buf);
+  glob(arg, GLOB_TILDE, nullptr, &glob_buf);
 
   std::vector<std::string> ret;
 
@@ -74,6 +54,10 @@ std::vector<std::string> expand_program_argument(void* var_mem, char* arg) {
   }
 
   globfree(&glob_buf);
+
+  if (ret.size() == 0) {
+    ret.emplace_back(arg);
+  }
 
   return ret;
 }
