@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -38,6 +39,7 @@ struct VariableMemory {
 struct SandboxingOptions {
   bool block_external_programs = false;
   bool run_in_root_sanbox = false;
+  bool dont_cache = false;
 
   bool any_features() { return run_in_root_sanbox | block_external_programs; }
 };
@@ -84,7 +86,9 @@ int exit_helper(int status);
 int wait_two_pid(void* var_mem, int pid1, int pid2);
 int write_to_location(void* var_mem, const char* data, size_t data_len,
                       const char* file);
-int count_argv(void* var_mem, char** argv);
-char** expand_argv(void* var_mem, int argc, char** argv);
+uint64_t count_argv(void* var_mem, char** argv);
+char** expand_argv(void* var_mem, uint64_t argc, char** argv);
+
+float fmodf(float x, float y);
 }
 

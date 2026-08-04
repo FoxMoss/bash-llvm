@@ -133,7 +133,7 @@ std::expected<llvm::Value*, std::string> ForInExprAST::codegen(
   return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
-std::expected<llvm::Value*, std::string> WhileAST::codegen(
+std::expected<llvm::Value*, std::string> WhileExprAST::codegen(
     CodegenState& state) {
   llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
 

@@ -543,13 +543,13 @@ class ConditionExprAST : public ExprAST {
       CodegenState& state) override;
 };
 
-class IfAST : public ExprAST {
+class IfExprAST : public ExprAST {
   std::unique_ptr<ExprAST> condition;
   std::unique_ptr<ExprAST> then_val;
   std::optional<std::unique_ptr<ExprAST>> else_val;
 
  public:
-  IfAST(std::unique_ptr<ExprAST> condition, std::unique_ptr<ExprAST> then_val,
+  IfExprAST(std::unique_ptr<ExprAST> condition, std::unique_ptr<ExprAST> then_val,
         std::optional<std::unique_ptr<ExprAST>> else_val)
       : condition(std::move(condition)),
         then_val(std::move(then_val)),
@@ -563,7 +563,7 @@ class IfAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("IfAST\n");
+    std::print("IfExprAST\n");
 
     condition->print_name(level + 1);
     then_val->print_name(level + 1);
@@ -574,12 +574,12 @@ class IfAST : public ExprAST {
   std::expected<llvm::Value*, std::string> codegen(
       CodegenState& state) override;
 };
-class WhileAST : public ExprAST {
+class WhileExprAST : public ExprAST {
   std::unique_ptr<ExprAST> condition;
   std::unique_ptr<ExprAST> body;
 
  public:
-  WhileAST(std::unique_ptr<ExprAST> condition, std::unique_ptr<ExprAST> body)
+  WhileExprAST(std::unique_ptr<ExprAST> condition, std::unique_ptr<ExprAST> body)
       : condition(std::move(condition)), body(std::move(body)) {}
 
   void print_name(ssize_t level) override {
@@ -590,7 +590,7 @@ class WhileAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("WhileAST\n");
+    std::print("WhileExprAST\n");
 
     condition->print_name(level + 1);
     body->print_name(level + 1);
@@ -653,13 +653,13 @@ class CaseExprAST : public ExprAST {
       CodegenState& state) override;
 };
 
-class ConcatStringsAST : public ExprAST {
+class ConcatStringsExprAST : public ExprAST {
   std::unique_ptr<ExprAST> str1;
   std::unique_ptr<ExprAST> str2;
   bool preformed;
 
  public:
-  ConcatStringsAST(std::unique_ptr<ExprAST> str1, std::unique_ptr<ExprAST> str2)
+  ConcatStringsExprAST(std::unique_ptr<ExprAST> str1, std::unique_ptr<ExprAST> str2)
       : str1(std::move(str1)),
         str2(std::move(str2)),
         preformed(this->str1->is_preformed() || this->str2->is_preformed()) {}
@@ -672,7 +672,7 @@ class ConcatStringsAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("ConcatStringsAST preformed={}\n", preformed);
+    std::print("ConcatStringsExprAST preformed={}\n", preformed);
 
     str1->print_name(level + 1);
     str2->print_name(level + 1);
@@ -684,12 +684,12 @@ class ConcatStringsAST : public ExprAST {
       CodegenState& state) override;
 };
 
-class FunctionDefAST : public ExprAST {
+class FunctionDefExprAST : public ExprAST {
   std::string name;
   std::unique_ptr<ExprAST> body;
 
  public:
-  FunctionDefAST(std::string name, std::unique_ptr<ExprAST> body)
+  FunctionDefExprAST(std::string name, std::unique_ptr<ExprAST> body)
       : name(std::move(name)), body(std::move(body)) {}
 
   void print_name(ssize_t level) override {
@@ -700,7 +700,7 @@ class FunctionDefAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("FunctionDefAST {}\n", name);
+    std::print("FunctionDefExprAST {}\n", name);
 
     body->print_name(level + 1);
   }
@@ -709,11 +709,11 @@ class FunctionDefAST : public ExprAST {
   std::vector<std::string> get_functions_defined() override { return {name}; }
 };
 
-class InjectIntoStringAST : public ExprAST {
+class InjectIntoStringExprAST : public ExprAST {
   std::unique_ptr<ExprAST> body;
 
  public:
-  InjectIntoStringAST(std::unique_ptr<ExprAST> body) : body(std::move(body)) {}
+  InjectIntoStringExprAST(std::unique_ptr<ExprAST> body) : body(std::move(body)) {}
 
   void print_name(ssize_t level) override {
     for (ssize_t i = 0; i < level - 1; i++) {
@@ -723,7 +723,7 @@ class InjectIntoStringAST : public ExprAST {
       std::print("|-");
     }
 
-    std::print("InjectIntoStringAST\n");
+    std::print("InjectIntoStringExprAST\n");
 
     body->print_name(level + 1);
   }

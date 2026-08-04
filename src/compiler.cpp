@@ -19,6 +19,8 @@
 #include "lexer.h"
 #include "main.h"
 
+File::File(std::string contents) : d_contents(std::move(contents)) {}
+
 const std::string& File::contents() const noexcept { return d_contents; }
 
 std::optional<File> File::open(std::string_view file_name) {

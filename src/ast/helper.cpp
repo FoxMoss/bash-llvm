@@ -137,9 +137,9 @@ std::optional<std::unique_ptr<ExprAST>> parse_value(
       RETURN_WITH_WARNING()
     }
 
-    return std::make_unique<ConcatStringsAST>(
-        std::make_unique<ConcatStringsAST>(
-            std::make_unique<ConcatStringsAST>(
+    return std::make_unique<ConcatStringsExprAST>(
+        std::make_unique<ConcatStringsExprAST>(
+            std::make_unique<ConcatStringsExprAST>(
                 std::make_unique<StringExprAST>("("), std::move(value.value())),
             std::make_unique<StringExprAST>(")")),
         std::move(after_value.value()));

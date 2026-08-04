@@ -153,7 +153,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_arg(
       }
 
       std::unique_ptr<ExprAST> inject_command =
-          std::make_unique<InjectIntoStringAST>(
+          std::make_unique<InjectIntoStringExprAST>(
               std::move(injected_str.value().value()));
 
       skip_whitespace_and_newline(lexer_segments, cursor);
@@ -248,7 +248,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
         if (!last_expr.has_value()) {
           RETURN_WITH_WARNING();
         }
-        last_expr = std::make_unique<ConcatStringsAST>(
+        last_expr = std::make_unique<ConcatStringsExprAST>(
             std::move(last_expr.value()), std::move(second_arg.value()));
       } break;
       default: {
@@ -259,7 +259,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_floating_expression(
         }
 
         if (last_expr.has_value()) {
-          last_expr = std::make_unique<ConcatStringsAST>(
+          last_expr = std::make_unique<ConcatStringsExprAST>(
               std::move(last_expr.value()), std::move(arg.value()));
         } else {
           last_expr = std::move(arg.value());

@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <cerrno>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -64,6 +63,66 @@ std::vector<std::string> expand_program_argument(void* var_mem, char* arg) {
 
 extern "C" {
 
+float fmodf(float x, float y) {
+  union {
+    float f;
+    uint32_t i;
+  } ux = {x}, uy = {y};
+  int ex = ux.i >> 23 & 0xff;
+  int ey = uy.i >> 23 & 0xff;
+  uint32_t sx = ux.i & 0x80000000;
+  uint32_t i;
+  uint32_t uxi = ux.i;
+
+  if (uy.i << 1 == 0 || std::isnan(y) || ex == 0xff) return (x * y) / (x * y);
+  if (uxi << 1 <= uy.i << 1) {
+    if (uxi << 1 == uy.i << 1) return 0 * x;
+    return x;
+  }
+
+  /* normalize x and y */
+  if (!ex) {
+    for (i = uxi << 9; i >> 31 == 0; ex--, i <<= 1);
+    uxi <<= -ex + 1;
+  } else {
+    uxi &= -1U >> 9;
+    uxi |= 1U << 23;
+  }
+  if (!ey) {
+    for (i = uy.i << 9; i >> 31 == 0; ey--, i <<= 1);
+    uy.i <<= -ey + 1;
+  } else {
+    uy.i &= -1U >> 9;
+    uy.i |= 1U << 23;
+  }
+
+  /* x mod y */
+  for (; ex > ey; ex--) {
+    i = uxi - uy.i;
+    if (i >> 31 == 0) {
+      if (i == 0) return 0 * x;
+      uxi = i;
+    }
+    uxi <<= 1;
+  }
+  i = uxi - uy.i;
+  if (i >> 31 == 0) {
+    if (i == 0) return 0 * x;
+    uxi = i;
+  }
+  for (; uxi >> 23 == 0; uxi <<= 1, ex--);
+
+  /* scale result up */
+  if (ex > 0) {
+    uxi -= 1U << 23;
+    uxi |= (uint32_t)ex << 23;
+  } else {
+    uxi >>= -ex + 1;
+  }
+  uxi |= sx;
+  ux.i = uxi;
+  return ux.f;
+}
 bool get_shell_opt(void* var_mem, const char* arg) {
   if (var_mem == nullptr) {
     std::println(stderr, "llsh: variable memory is null");
@@ -535,7 +594,7 @@ int wait_two_pid(void* var_mem, int pid1, int pid2) {
   return 0;
 }
 
-int count_argv(void* var_mem, char** argv) {
+uint64_t count_argv(void* var_mem, char** argv) {
   int count = 0;
   while (*argv != nullptr) {
     argv++;
@@ -544,7 +603,7 @@ int count_argv(void* var_mem, char** argv) {
   return count;
 }
 
-char** expand_argv(void* var_mem, int argc, char** argv) {
+char** expand_argv(void* var_mem, uint64_t argc, char** argv) {
   std::vector<std::string> ret;
 
   for (uint32_t i = 0; i < argc; i++) {

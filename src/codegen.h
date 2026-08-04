@@ -277,6 +277,30 @@ struct CodegenState {
 
     generate_standard_library();
   }
+
+  CodegenState(std::unique_ptr<llvm::LLVMContext> context,
+               std::unique_ptr<llvm::Module> module, bool is_jit)
+      : context(std::move(context)), module(std::move(module)), is_jit(is_jit) {
+    // create a new builder for the module.
+    builder = std::make_unique<llvm::IRBuilder<>>(*this->context);
+
+    InitializeAllTargetInfos();
+    InitializeAllTargets();
+    InitializeAllTargetMCs();
+    InitializeAllAsmParsers();
+    InitializeAllAsmPrinters();
+
+    lam = std::make_unique<llvm::LoopAnalysisManager>();
+    fam = std::make_unique<llvm::FunctionAnalysisManager>();
+    cgam = std::make_unique<llvm::CGSCCAnalysisManager>();
+    mam = std::make_unique<llvm::ModuleAnalysisManager>();
+    pic = std::make_unique<llvm::PassInstrumentationCallbacks>();
+    si =
+        std::make_unique<llvm::StandardInstrumentations>(*this->context,
+                                                         /*DebugLogging*/ true);
+    si->registerCallbacks(*pic, mam.get());
+  }
+
   CodegenState(std::vector<std::string> function_protypes, bool is_jit)
       : is_jit(is_jit) {
     init_llvm();

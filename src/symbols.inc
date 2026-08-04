@@ -7,6 +7,7 @@ SYMBOL(str_to_len)
 SYMBOL(int_len)
 SYMBOL(int_to_str)
 SYMBOL(strequals)
+SYMBOL(fmodf)
 
 SYMBOL(create_variable_memory)
 SYMBOL(store_variable_memory)

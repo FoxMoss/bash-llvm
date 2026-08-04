@@ -558,7 +558,7 @@ std::expected<llvm::Value*, std::string> AssignmentExprAST::codegen(
   return val_str.value();
 }
 
-std::expected<llvm::Value*, std::string> ConcatStringsAST::codegen(
+std::expected<llvm::Value*, std::string> ConcatStringsExprAST::codegen(
     CodegenState& state) {
   auto first_v = str1->codegen(state);
   UNWRAP_EXPECTED(first_v)
@@ -617,7 +617,7 @@ std::expected<llvm::Value*, std::string> CompoundExprAST::codegen(
   return exprs.back()->codegen(state);
 }
 
-std::expected<llvm::Value*, std::string> FunctionDefAST::codegen(
+std::expected<llvm::Value*, std::string> FunctionDefExprAST::codegen(
     CodegenState& state) {
   llvm::BasicBlock* return_block = state.builder->GetInsertBlock();
 
@@ -674,7 +674,7 @@ std::expected<llvm::Value*, std::string> FunctionDefAST::codegen(
   return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
-std::expected<llvm::Value*, std::string> IfAST::codegen(CodegenState& state) {
+std::expected<llvm::Value*, std::string> IfExprAST::codegen(CodegenState& state) {
   llvm::Function* parent_func = state.builder->GetInsertBlock()->getParent();
 
   if (else_val.has_value()) {
@@ -734,7 +734,7 @@ std::expected<llvm::Value*, std::string> IfAST::codegen(CodegenState& state) {
   return llvm::ConstantInt::get(llvm::Type::getInt32Ty(*state.context), 0);
 }
 
-std::expected<llvm::Value*, std::string> InjectIntoStringAST::codegen(
+std::expected<llvm::Value*, std::string> InjectIntoStringExprAST::codegen(
     CodegenState& state) {
   auto pushed_stack = state.runtime_push_output_stack(1 /* 1 == STRING */);
   UNWRAP_EXPECTED(pushed_stack)

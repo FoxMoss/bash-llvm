@@ -446,7 +446,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_if(
   if (current_segment->token == TOK_FI) {
     get_next_segment(lexer_segments,
                      cursor);  // move cursor to continue parsing
-    return std::make_unique<IfAST>(std::move(cond.value()),
+    return std::make_unique<IfExprAST>(std::move(cond.value()),
                                    std::move(then_val.value()), std::nullopt);
   }
 
@@ -470,7 +470,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_if(
   }
   get_next_segment(lexer_segments, cursor);  // eat fi
 
-  return std::make_unique<IfAST>(std::move(cond.value()),
+  return std::make_unique<IfExprAST>(std::move(cond.value()),
                                  std::move(then_val.value()),
                                  std::move(else_val.value()));
 }
@@ -508,7 +508,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_while(
 
   get_next_segment(lexer_segments,
                    cursor);  // move cursor to continue parsing
-  return std::make_unique<WhileAST>(std::move(cond.value()),
+  return std::make_unique<WhileExprAST>(std::move(cond.value()),
                                     std::move(body.value()));
 }
 
@@ -539,7 +539,7 @@ std::optional<std::unique_ptr<ExprAST>> parse_function_body(
 
   get_next_segment(lexer_segments, cursor);
 
-  return std::make_unique<FunctionDefAST>(func_name, std::move(body.value()));
+  return std::make_unique<FunctionDefExprAST>(func_name, std::move(body.value()));
 }
 
 std::optional<std::unique_ptr<ExprAST>> parse_assignment(

@@ -4,6 +4,8 @@
 
 #include "../std/main.h"
 
+#define CACHE_MAGIC "LLSH-BC-FMT-0001"
+
 enum OptimizationFlag {
   OPT_O0 = 0,
   OPT_O1 = 1,

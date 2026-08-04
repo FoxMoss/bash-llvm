@@ -13,8 +13,6 @@
 #include "belladonna.h"
 #endif
 
-File::File(std::string contents) : d_contents(std::move(contents)) {}
-
 int main(int argc, char* argv[]) {
   try {
     CLI::App app{"LLVM Bash compiler"};
@@ -29,6 +27,9 @@ int main(int argc, char* argv[]) {
     SandboxingOptions sandboxing;
     app.add_flag("-e,--disable-external", sandboxing.block_external_programs,
                  "Prevent script from running non-builtin commands");
+
+    app.add_flag("-c,--dont-cache", sandboxing.dont_cache,
+                 "Don't cache interpreted files in a .sh.llsh file");
 
 #ifdef USE_BELLADONNA
     app.add_flag(

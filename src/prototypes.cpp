@@ -255,7 +255,7 @@ void CodegenState::generate_standard_library() {
   {
     std::vector<llvm::Type*> func_args = {
         llvm::PointerType::get(*this->context, 0),
-        llvm::Type::getInt32Ty(*context),
+        llvm::Type::getInt64Ty(*context),
         llvm::PointerType::get(*this->context, 0)};
 
     llvm::FunctionType* func_type = llvm::FunctionType::get(
@@ -270,7 +270,7 @@ void CodegenState::generate_standard_library() {
         llvm::PointerType::get(*this->context, 0)};
 
     llvm::FunctionType* func_type = llvm::FunctionType::get(
-        llvm::Type::getInt32Ty(*context), func_args, false);
+        llvm::Type::getInt64Ty(*context), func_args, false);
 
     llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                            "count_argv", module.get());
@@ -287,5 +287,16 @@ void CodegenState::generate_standard_library() {
 
     llvm::Function::Create(func_type, llvm::Function::ExternalLinkage,
                            "write_to_location", module.get());
+  }
+  {
+    std::vector<llvm::Type*> func_args = {
+        llvm::Type::getFloatTy(*this->context),
+        llvm::Type::getFloatTy(*this->context)};
+
+    llvm::FunctionType* func_type = llvm::FunctionType::get(
+        llvm::Type::getFloatTy(*this->context), func_args, false);
+
+    llvm::Function::Create(func_type, llvm::Function::ExternalLinkage, "fmodf",
+                           module.get());
   }
 }

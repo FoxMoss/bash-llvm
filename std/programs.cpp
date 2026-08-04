@@ -136,7 +136,7 @@ int bash_echo(void* var_mem, uint64_t argc, char** argv) {
   std::string output;
 
   for (uint64_t i = 0; i < argc; i++) {
-    output += std::format("{}", argv[i]);
+    output += std::string(argv[i]);
     if (i != argc - 1 && i != argc - 1) {
       output += " ";
     }
@@ -157,8 +157,7 @@ int bash_echo(void* var_mem, uint64_t argc, char** argv) {
   switch (var_mem_usable->output_stack[var_mem_usable->output_stack_iterator]
               .location) {
     case OutputFactor::OUTPUT_STDOUT:
-      std::print("{}", output);
-      std::flush(std::cout);
+      std::printf("%s", output.c_str());
       break;
 
     case OutputFactor::OUTPUT_STR:
