@@ -56,6 +56,10 @@ int main(int argc, char* argv[]) {
     std::optional<std::string> ir_file;
     compile->add_option("--emit-ir", ir_file, "Output file for LLVM ir");
 
+    std::optional<std::string> executable_out;
+    compile->add_option("--executable", executable_out,
+                        "Output executable artifact");
+
     OptimizationFlag opt_flag = OPT_O0;
     compile->add_flag("-O0{0},-O1{1},-O2{2},-O3{3},-Oz{4},-Os{5},", opt_flag,
                       "Optimization level");
@@ -67,8 +71,8 @@ int main(int argc, char* argv[]) {
         std::println(stderr, "error: cannot use sandboxing precompiled");
         return 1;
       }
-      if (!compile_bash(input_file, object_file, opt_flag, false, debug_general,
-                        sandboxing, ir_file)) {
+      if (!compile_bash(input_file, object_file, executable_out, opt_flag,
+                        false, debug_general, sandboxing, ir_file)) {
         std::println(stderr, "error: compile failed");
         return 1;
       }

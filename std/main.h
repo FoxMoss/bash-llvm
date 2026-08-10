@@ -39,7 +39,7 @@ struct VariableMemory {
 struct SandboxingOptions {
   bool block_external_programs = false;
   bool run_in_root_sanbox = false;
-  bool dont_cache = false;
+  bool dont_cache = true;
 
   bool any_features() { return run_in_root_sanbox | block_external_programs; }
 };

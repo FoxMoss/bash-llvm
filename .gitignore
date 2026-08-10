@@ -4,3 +4,4 @@ old-gnu-build/
 .cache/
 compile_commands.json
 blog/
+*.llsh

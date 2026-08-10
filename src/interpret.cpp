@@ -65,6 +65,7 @@ void bash_interpret(std::string file_name, bool debug,
                      llvm::toString(module.takeError()));
       }
       goto jit_from_source;
+      return;
     }
 
     state = CodegenState(std::move(context), std::move(module.get()), true);

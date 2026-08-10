@@ -17,6 +17,7 @@ enum OptimizationFlag {
 
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
+                                std::optional<std::string> exectuable_out,
                                 OptimizationFlag opt_flag, bool debug_lexer,
                                 bool debug_ast, SandboxingOptions sandboxing,
                                 std::optional<std::string> ir_file);

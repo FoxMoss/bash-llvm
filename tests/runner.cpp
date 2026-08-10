@@ -1,29 +1,43 @@
+#include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <nlohmann/json.hpp>
 #include <nlohmann/json_fwd.hpp>
 #include <print>
+#include <set>
 #include <string>
 
 int main(int argc, char* argv[]) {
-  if (argc != 3 && argc != 4) {
-    std::println(stderr, "USAGE: {} <bench> [test_directory] [impl]", argv[0]);
+  if (argc != 3 && argc != 4 && argc != 5) {
+    std::println(stderr, "USAGE: {} <bench> <precomp> [test_directory] [impl]",
+                 argv[0]);
     return 1;
   }
 
   bool bench = strcmp(argv[1], "bench") == 0;
-  if (bench && argc != 4) {
-    std::println(stderr, "USAGE: {} bench [test_directory] [impl]", argv[0]);
+  if (bench && argc != 4 && argc != 5) {
+    std::println(stderr, "USAGE: {} bench <precomp> [test_directory] [impl]",
+                 argv[0]);
+    return 1;
+  }
+  bool precomp = strcmp(argv[1 + bench], "precomp") == 0;
+  if (precomp && argc != 4 && argc != 5) {
+    std::println(stderr, "USAGE: {} <bench> precomp [test_directory] [impl]",
+                 argv[0]);
     return 1;
   }
 
-  std::filesystem::path test_directory(argv[1 + bench]);
-  std::filesystem::path impl_progam(argv[2 + bench]);
+  int add = bench + precomp;
+
+  std::filesystem::path test_directory(argv[1 + add]);
+  std::filesystem::path impl_progam(argv[2 + add]);
 
   if (!std::filesystem::is_directory(test_directory)) {
     std::println(stderr, "Error {} is not a directory",
@@ -73,6 +87,30 @@ int main(int argc, char* argv[]) {
                          outbuffer.begin() + size);
     }
 
+    std::string test_prog;
+    const char* first_arg;
+    if (precomp) {
+      test_prog =
+          std::format("/tmp/{}.o", file.path().filename().string()).c_str();
+      first_arg = nullptr;
+
+      auto comp_fd = fork();
+      if (comp_fd == 0) {
+        close(STDERR_FILENO);
+        execl(std::filesystem::absolute(impl_progam).c_str(),
+              impl_progam.filename().c_str(), "compile",
+              std::filesystem::absolute(file.path()).c_str(), "--executable",
+              test_prog.c_str(), nullptr);
+        return 0;
+      }
+
+      int stat_loc;
+      waitpid(comp_fd, &stat_loc, 0);
+    } else {
+      test_prog = std::filesystem::absolute(impl_progam).string();
+      first_arg = std::filesystem::absolute(file.path()).c_str();
+    }
+
     auto before_time = std::chrono::high_resolution_clock::now();
     std::array<int, 2> impl_link;
     pipe(impl_link.data());
@@ -82,9 +120,7 @@ int main(int argc, char* argv[]) {
       close(impl_link[0]);
       close(impl_link[1]);
       close(STDERR_FILENO);
-      execl(std::filesystem::absolute(impl_progam).c_str(),
-            impl_progam.filename().c_str(),
-            std::filesystem::absolute(file.path()).c_str(), nullptr);
+      execl(test_prog.c_str(), test_prog.c_str(), first_arg, nullptr);
       return 0;
     }
     close(impl_link[1]);
@@ -166,6 +202,42 @@ int main(int argc, char* argv[]) {
     }
     std::ofstream out_file("bench_persistent.json");
     out_file << persistent.dump();
+
+    std::map<std::string, std::vector<double>> unique_tests;
+    std::print("|   |");
+    size_t implementations = 0;
+    for (auto& impl : persistent.items()) {
+      std::print(" {} |", impl.key());
+
+      for (auto& test : impl.value().items()) {
+        unique_tests[test.key()].push_back(test.value());
+      }
+      implementations++;
+    }
+    std::print("\n");
+
+    for (size_t i = 0; i < implementations; i++) {
+      std::print("|---");
+    }
+    std::print("|---|\n");
+
+    for (auto test : unique_tests) {
+      if (test.second.size() != implementations) {
+        continue;
+      }
+
+      auto min =
+          std::ranges::min_element(test.second.begin(), test.second.end());
+      std::print("| {} |", test.first);
+      for (auto val : test.second) {
+        if (*min.base() == val) {
+          std::print(" {}ms winner! |", val);
+        } else {
+          std::print(" {}ms |", val);
+        }
+      }
+      std::print("\n");
+    }
   }
 
   return 0;

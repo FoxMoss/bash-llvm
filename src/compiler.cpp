@@ -2,6 +2,7 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/MC/TargetRegistry.h>
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Support/Program.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetMachine.h>
@@ -18,6 +19,7 @@
 #include "ast/ast.h"
 #include "lexer.h"
 #include "main.h"
+#include "whereami.h"
 
 File::File(std::string contents) : d_contents(std::move(contents)) {}
 
@@ -35,6 +37,7 @@ std::optional<File> File::open(std::string_view file_name) {
 
 [[nodiscard]] bool compile_bash(std::string filename_in,
                                 std::string filename_out,
+                                std::optional<std::string> exectuable_out,
                                 OptimizationFlag opt_flag, bool debug_lexer,
                                 bool debug_ast, SandboxingOptions sandboxing,
                                 std::optional<std::string> ir_file) {
@@ -156,7 +159,7 @@ std::optional<File> File::open(std::string_view file_name) {
   if (target_machine->addPassesToEmitFile(object_passes, out_file, nullptr,
                                           llvm::CodeGenFileType::ObjectFile)) {
     std::println(stderr, "target machine can't output object file");
-    return true;
+    return false;
   }
 
   object_passes.run(*state.module);
@@ -167,6 +170,37 @@ std::optional<File> File::open(std::string_view file_name) {
   if (ir_file.has_value()) {
     llvm::raw_fd_ostream ir_out_file(ir_file.value(), error_code);
     state.module->print(ir_out_file, nullptr);
+  }
+
+  if (exectuable_out.has_value()) {
+    std::array<char, 1024> module_path = {};
+    int length = wai_getModulePath(module_path.data(), 1023, nullptr);
+
+    auto module_path_parent =
+        std::filesystem::path(std::string(module_path.data(), length))
+            .parent_path()
+            .string();
+
+    auto library_path = std::format("{}/libstdllsh.so", module_path_parent);
+
+    auto clang_path = llvm::sys::findProgramByName("clang++");
+    if (!clang_path) {
+      std::println(stderr, "cannot find clang++ to make executable");
+      return false;
+    }
+    std::vector<llvm::StringRef> args;
+    args.emplace_back(clang_path.get());
+    args.emplace_back("-rpath");
+    args.emplace_back(module_path_parent);
+    args.emplace_back(library_path);
+    args.emplace_back(filename_out);
+    args.emplace_back("-o");
+    args.emplace_back(exectuable_out.value());
+
+    llvm::sys::ExecuteAndWait(clang_path.get(),
+                              llvm::ArrayRef(args.data(), args.size()));
+
+    std::filesystem::remove(filename_out);
   }
 
   return true;
