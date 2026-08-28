@@ -88,11 +88,13 @@ int main(int argc, char* argv[]) {
     }
 
     std::string test_prog;
-    const char* first_arg;
+    std::optional<std::string> first_arg;
+    std::optional<std::string> second_arg;
+
     if (precomp) {
-      test_prog =
-          std::format("/tmp/{}.o", file.path().filename().string()).c_str();
-      first_arg = nullptr;
+      test_prog = std::format("/tmp/{}.o", file.path().filename().string());
+      first_arg = {};
+      second_arg = {};
 
       auto comp_fd = fork();
       if (comp_fd == 0) {
@@ -108,7 +110,8 @@ int main(int argc, char* argv[]) {
       waitpid(comp_fd, &stat_loc, 0);
     } else {
       test_prog = std::filesystem::absolute(impl_progam).string();
-      first_arg = std::filesystem::absolute(file.path()).c_str();
+      first_arg = impl_progam.filename();
+      second_arg = std::filesystem::absolute(file.path());
     }
 
     auto before_time = std::chrono::high_resolution_clock::now();
@@ -120,7 +123,9 @@ int main(int argc, char* argv[]) {
       close(impl_link[0]);
       close(impl_link[1]);
       close(STDERR_FILENO);
-      execl(test_prog.c_str(), test_prog.c_str(), first_arg, nullptr);
+      execl(test_prog.c_str(),
+            first_arg.has_value() ? first_arg->c_str() : nullptr,
+            second_arg.has_value() ? second_arg->c_str() : nullptr, nullptr);
       return 0;
     }
     close(impl_link[1]);
@@ -231,7 +236,7 @@ int main(int argc, char* argv[]) {
       std::print("| {} |", test.first);
       for (auto val : test.second) {
         if (*min.base() == val) {
-          std::print(" {}ms winner! |", val);
+          std::print(" {}ms |", val);
         } else {
           std::print(" {}ms |", val);
         }
