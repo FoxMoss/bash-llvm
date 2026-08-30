@@ -40,6 +40,11 @@ set(CPM_SOURCE_CACHE ${CMAKE_BINARY_DIR}/cpmcache)
 include(cmake/LLVM.cmake)
 add_subdirectory(std)
 
+set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+set(BUILD_SHARED_LIBS OFF)
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+
 add_subdirectory(src)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)

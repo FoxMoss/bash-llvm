@@ -177,8 +177,8 @@ std::optional<File> File::open(std::string_view file_name) {
     int length = wai_getModulePath(module_path.data(), 1023, nullptr);
 
     auto module_path_parent =
-        std::filesystem::path(std::string(module_path.data(), length))
-            .parent_path()
+        (std::filesystem::path(std::string(module_path.data(), length))
+            .parent_path().parent_path() / "lib")
             .string();
 
     auto library_path = std::format("{}/libstdllsh.so", module_path_parent);
@@ -192,8 +192,8 @@ std::optional<File> File::open(std::string_view file_name) {
     args.emplace_back(clang_path.get());
     args.emplace_back("-rpath");
     args.emplace_back(module_path_parent);
-    args.emplace_back(library_path);
     args.emplace_back(filename_out);
+    args.emplace_back(library_path);
     args.emplace_back("-o");
     args.emplace_back(exectuable_out.value());
 

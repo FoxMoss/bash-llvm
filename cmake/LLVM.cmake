@@ -221,10 +221,6 @@ execute_process(
     ${LLVM_SYS_LIBS_LIST}
   )
 
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-  set(BUILD_SHARED_LIBS OFF)
-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
-
   include_directories(/usr/include/llvm22/)
 
 endif()
