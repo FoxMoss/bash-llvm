@@ -136,7 +136,7 @@ if(TRIPLET STREQUAL "x86_64-linux-gnu")
 
   CPMAddPackage(
     NAME lzma-deb 
-    URL http://http.us.debian.org/debian/pool/main/x/xz-utils/liblzma5_5.4.1-1_amd64.deb)
+    URL http://http.us.debian.org/debian/pool/main/x/xz-utils/liblzma5_5.8.3-1_amd64.deb)
   CPMAddPackage(
     NAME lzma 
     URL ${lzma-deb_SOURCE_DIR}/data.tar.xz)
